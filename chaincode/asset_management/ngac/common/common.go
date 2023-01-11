@@ -2,10 +2,11 @@ package common
 
 import (
 	"fmt"
+
 	"github.com/PM-Master/policy-machine-go/pip/memory"
 	"github.com/PM-Master/policy-machine-go/policy"
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
-	"github.com/usnistgov/blossom/chaincode/collections"
+	"github.com/usnistgov/blossom/chaincode/asset_management/collections"
 )
 
 const (

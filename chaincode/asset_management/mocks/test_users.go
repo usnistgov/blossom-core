@@ -4,8 +4,9 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+
 	"github.com/hyperledger/fabric-chaincode-go/pkg/attrmgr"
-	"github.com/usnistgov/blossom/chaincode/model"
+	"github.com/usnistgov/blossom/chaincode/asset_management/model"
 )
 
 func buildIdentity(certStr, mspid string) (*ClientIdentity, error) {

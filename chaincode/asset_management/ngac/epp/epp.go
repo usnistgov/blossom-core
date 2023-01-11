@@ -2,12 +2,13 @@ package epp
 
 import (
 	"fmt"
+
 	"github.com/PM-Master/policy-machine-go/epp"
 	"github.com/PM-Master/policy-machine-go/policy"
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
-	"github.com/usnistgov/blossom/chaincode/collections"
-	"github.com/usnistgov/blossom/chaincode/model"
-	"github.com/usnistgov/blossom/chaincode/ngac/common"
+	"github.com/usnistgov/blossom/chaincode/asset_management/collections"
+	"github.com/usnistgov/blossom/chaincode/asset_management/model"
+	"github.com/usnistgov/blossom/chaincode/asset_management/ngac/common"
 )
 
 func process(ctx contractapi.TransactionContextInterface, evtCtx epp.EventContext, policyStore policy.Store) error {

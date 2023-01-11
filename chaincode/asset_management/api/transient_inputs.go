@@ -3,8 +3,9 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
-	"github.com/usnistgov/blossom/chaincode/model"
+	"github.com/usnistgov/blossom/chaincode/asset_management/model"
 )
 
 type (

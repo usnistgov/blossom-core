@@ -2,9 +2,9 @@ package pdp
 
 import (
 	"github.com/stretchr/testify/require"
-	"github.com/usnistgov/blossom/chaincode/adminmsp"
-	"github.com/usnistgov/blossom/chaincode/collections"
-	"github.com/usnistgov/blossom/chaincode/mocks"
+	"github.com/usnistgov/blossom/chaincode/asset_management/adminmsp"
+	"github.com/usnistgov/blossom/chaincode/asset_management/collections"
+	"github.com/usnistgov/blossom/chaincode/asset_management/mocks"
 	"testing"
 )
 

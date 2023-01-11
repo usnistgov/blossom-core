@@ -3,9 +3,9 @@ package api
 import (
 	"encoding/json"
 	"github.com/stretchr/testify/require"
-	"github.com/usnistgov/blossom/chaincode/collections"
-	"github.com/usnistgov/blossom/chaincode/mocks"
-	"github.com/usnistgov/blossom/chaincode/model"
+	"github.com/usnistgov/blossom/chaincode/asset_management/collections"
+	"github.com/usnistgov/blossom/chaincode/asset_management/mocks"
+	"github.com/usnistgov/blossom/chaincode/asset_management/model"
 	"testing"
 )
 

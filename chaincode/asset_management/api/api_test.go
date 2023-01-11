@@ -4,10 +4,10 @@ import (
 	"github.com/hyperledger/fabric-chaincode-go/pkg/cid"
 	"github.com/hyperledger/fabric-chaincode-go/shim"
 	"github.com/stretchr/testify/require"
-	"github.com/usnistgov/blossom/chaincode/adminmsp"
-	"github.com/usnistgov/blossom/chaincode/collections"
-	"github.com/usnistgov/blossom/chaincode/mocks"
-	"github.com/usnistgov/blossom/chaincode/model"
+	"github.com/usnistgov/blossom/chaincode/asset_management/adminmsp"
+	"github.com/usnistgov/blossom/chaincode/asset_management/collections"
+	"github.com/usnistgov/blossom/chaincode/asset_management/mocks"
+	"github.com/usnistgov/blossom/chaincode/asset_management/model"
 	"testing"
 )
 

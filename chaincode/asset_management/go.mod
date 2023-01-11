@@ -1,4 +1,4 @@
-module github.com/usnistgov/blossom/chaincode
+module github.com/usnistgov/blossom/chaincode/asset_management
 
 go 1.14
 

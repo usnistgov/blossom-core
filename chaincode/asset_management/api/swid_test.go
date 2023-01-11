@@ -2,8 +2,8 @@ package api
 
 import (
 	"github.com/stretchr/testify/require"
-	"github.com/usnistgov/blossom/chaincode/mocks"
-	"github.com/usnistgov/blossom/chaincode/model"
+	"github.com/usnistgov/blossom/chaincode/asset_management/mocks"
+	"github.com/usnistgov/blossom/chaincode/asset_management/model"
 	"testing"
 )
 

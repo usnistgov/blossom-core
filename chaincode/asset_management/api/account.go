@@ -3,15 +3,16 @@ package api
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/hyperledger/fabric-contract-api-go/contractapi"
-	"github.com/hyperledger/fabric-protos-go/ledger/queryresult"
-	"github.com/usnistgov/blossom/chaincode/collections"
-	events "github.com/usnistgov/blossom/chaincode/ngac/epp"
-	decider "github.com/usnistgov/blossom/chaincode/ngac/pdp"
 	"strings"
 	"time"
 
-	"github.com/usnistgov/blossom/chaincode/model"
+	"github.com/hyperledger/fabric-contract-api-go/contractapi"
+	"github.com/hyperledger/fabric-protos-go/ledger/queryresult"
+	"github.com/usnistgov/blossom/chaincode/asset_management/collections"
+	events "github.com/usnistgov/blossom/chaincode/asset_management/ngac/epp"
+	decider "github.com/usnistgov/blossom/chaincode/asset_management/ngac/pdp"
+
+	"github.com/usnistgov/blossom/chaincode/asset_management/model"
 )
 
 func NewAccountContract() AccountInterface {

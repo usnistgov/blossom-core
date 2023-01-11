@@ -2,6 +2,7 @@ package pap
 
 import (
 	"fmt"
+
 	"github.com/PM-Master/policy-machine-go/pip/memory"
 	"github.com/PM-Master/policy-machine-go/policy"
 	"github.com/PM-Master/policy-machine-go/policy/author"
@@ -10,8 +11,8 @@ import (
 	"github.com/PM-Master/policy-machine-go/policy/author/deassign"
 	"github.com/PM-Master/policy-machine-go/policy/author/grant"
 	"github.com/PM-Master/policy-machine-go/policy/author/remove"
-	"github.com/usnistgov/blossom/chaincode/adminmsp"
-	"github.com/usnistgov/blossom/chaincode/model"
+	"github.com/usnistgov/blossom/chaincode/asset_management/adminmsp"
+	"github.com/usnistgov/blossom/chaincode/asset_management/model"
 )
 
 const (

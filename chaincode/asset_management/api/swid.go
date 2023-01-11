@@ -3,12 +3,13 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
+
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
 	"github.com/hyperledger/fabric-protos-go/ledger/queryresult"
-	"github.com/usnistgov/blossom/chaincode/collections"
-	"github.com/usnistgov/blossom/chaincode/model"
-	"github.com/usnistgov/blossom/chaincode/ngac/pdp"
-	"strings"
+	"github.com/usnistgov/blossom/chaincode/asset_management/collections"
+	"github.com/usnistgov/blossom/chaincode/asset_management/model"
+	"github.com/usnistgov/blossom/chaincode/asset_management/ngac/pdp"
 )
 
 func NewSwIDContract() SwIDInterface {

@@ -1,9 +1,10 @@
 package main
 
 import (
-	"github.com/hyperledger/fabric-contract-api-go/contractapi"
-	"github.com/usnistgov/blossom/chaincode/api"
 	"log"
+
+	"github.com/hyperledger/fabric-contract-api-go/contractapi"
+	"github.com/usnistgov/blossom/chaincode/asset_management/api"
 )
 
 func main() {

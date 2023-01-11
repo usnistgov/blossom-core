@@ -2,8 +2,8 @@ package api
 
 import (
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
-	"github.com/usnistgov/blossom/chaincode/model"
-	"github.com/usnistgov/blossom/chaincode/ngac/pdp"
+	"github.com/usnistgov/blossom/chaincode/asset_management/model"
+	"github.com/usnistgov/blossom/chaincode/asset_management/ngac/pdp"
 )
 
 type (

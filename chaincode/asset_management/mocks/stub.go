@@ -2,12 +2,13 @@ package mocks
 
 import (
 	"encoding/json"
+
 	"github.com/PM-Master/policy-machine-go/policy"
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/hyperledger/fabric-chaincode-go/shim"
 	"github.com/hyperledger/fabric-protos-go/ledger/queryresult"
 	"github.com/hyperledger/fabric-protos-go/peer"
-	"github.com/usnistgov/blossom/chaincode/ngac/common"
+	"github.com/usnistgov/blossom/chaincode/asset_management/ngac/common"
 )
 
 type (

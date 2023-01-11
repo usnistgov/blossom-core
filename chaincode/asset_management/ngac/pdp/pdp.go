@@ -2,14 +2,15 @@ package pdp
 
 import (
 	"fmt"
+
 	"github.com/PM-Master/policy-machine-go/pdp"
 	"github.com/PM-Master/policy-machine-go/policy"
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
-	"github.com/usnistgov/blossom/chaincode/adminmsp"
-	"github.com/usnistgov/blossom/chaincode/collections"
-	"github.com/usnistgov/blossom/chaincode/model"
-	"github.com/usnistgov/blossom/chaincode/ngac/common"
-	"github.com/usnistgov/blossom/chaincode/ngac/pap"
+	"github.com/usnistgov/blossom/chaincode/asset_management/adminmsp"
+	"github.com/usnistgov/blossom/chaincode/asset_management/collections"
+	"github.com/usnistgov/blossom/chaincode/asset_management/model"
+	"github.com/usnistgov/blossom/chaincode/asset_management/ngac/common"
+	"github.com/usnistgov/blossom/chaincode/asset_management/ngac/pap"
 )
 
 func InitCatalogNGAC(ctx contractapi.TransactionContextInterface) error {
