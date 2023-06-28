@@ -8,6 +8,8 @@ import model.Status;
 import ngac.BlossomPDP;
 import org.apache.commons.lang3.SerializationUtils;
 import org.hyperledger.fabric.contract.Context;
+import org.hyperledger.fabric.contract.annotation.Contract;
+import org.hyperledger.fabric.contract.annotation.Info;
 import org.hyperledger.fabric.contract.annotation.Transaction;
 import org.hyperledger.fabric.shim.ledger.KeyModification;
 import org.hyperledger.fabric.shim.ledger.KeyValue;
@@ -19,6 +21,10 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+@Contract(
+        name = "account",
+        info = @Info(title = "Blossom Authorization Account Contract", version = "0.0.1")
+)
 public class AuthorizationContract {
 
     public static final String ACCOUNT_PREFIX = "account:";

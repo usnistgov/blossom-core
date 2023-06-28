@@ -24,9 +24,8 @@ import static ngac.BlossomPDP.getNGACUserName;
 
 @Contract(
         name = "ngac",
-        info = @Info(title = "NGAC contract", version = "0.0.1")
+        info = @Info(title = "Blossom Authorization NGAC Contract", version = "0.0.1")
 )
-@Default
 public class NGACContract implements ContractInterface {
 
     public NGACContract() {

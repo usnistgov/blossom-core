@@ -8,6 +8,8 @@ import ngac.BlossomEPP;
 import ngac.BlossomPDP;
 import org.bouncycastle.asn1.cmc.GetCert;
 import org.hyperledger.fabric.contract.Context;
+import org.hyperledger.fabric.contract.annotation.Contract;
+import org.hyperledger.fabric.contract.annotation.Info;
 import org.hyperledger.fabric.contract.annotation.Transaction;
 import org.hyperledger.fabric.shim.ledger.KeyValue;
 import org.hyperledger.fabric.shim.ledger.QueryResultsIterator;
@@ -19,6 +21,10 @@ import java.util.List;
 import static contract.AuthorizationContract.ACCOUNT_PREFIX;
 import static contract.AuthorizationContract.accountKey;
 
+@Contract(
+        name = "vote",
+        info = @Info(title = "Blossom Authorization Vote Contract", version = "0.0.1")
+)
 public class VoteContract {
 
     public static final String VOTE_PREFIX = "vote:";
