@@ -35,6 +35,7 @@ create pc "RBAC"
     create oa "blossom_system"      in ["RBAC.blossom_system"]
 
     associate "Blossom Admin"           and "RBAC.blossom_system"   with ["bootstrap", "update_account_status", "approve_account"]
+    associate "Blossom Admin"           and "RBAC.accounts"         with ["create_object"]
     # this association is with the blossom system because these permissions are never lost
     # association directly with the OA applies the association to all policy classes the OA is contained in
     associate "System Owner"            and "blossom_system"        with ["request_account"]
@@ -49,35 +50,39 @@ const PENDING_STATUSES      = ["PENDING_APPROVAL", "PENDING_ATO"]
 const UNAUTHORIZED_STATUSES = ["UNAUTHORIZED_DENIED", "UNAUTHORIZED_ATO", "UNAUTHORIZED_OPTOUT", "UNAUTHORIZED_SECURITY_RISK", "UNAUTHORIZED_ROB"]
 create pc "Status"
 
-    create ua "authorized"                  in ["Status"]
-    create ua "pending"                     in ["Status"]
-    create ua "unauthorized"                in ["pending"]
+    create ua "statuses"        in ["Status"]
+    create ua "authorized"      in ["statuses"]
+    create ua "pending"         in ["statuses"]
+    create ua "unauthorized"    in ["pending"]
+    create ua "Status Writer"   in ["Status"]
+    assign "Blossom Admin"      to ["Status Writer"]
 
     create oa "Status.blossom_system" in ["Status"]
     assign "blossom_system" to ["Status.blossom_system"]
 
     associate "authorized"      and "Status.blossom_system" with ["*r"]
-    associate "pending"         and "Status.blossom_system" with ["initiate_vote", "delete_vote", "complete_vote"]
+    # associate "pending"         and "Status.blossom_system" with ["initiate_vote", "delete_vote", "complete_vote"]
 
-    create obligation "account status" {
-        create rule "update account status"
-        when any user
-        performs ["update_account_status"]
-        do(ctx) {
-            let accountName = ctx["event"]["accountName"]
-            let status      = ctx["event"]["status"]
-            let accountUA = accountUsersNodeName(accountName)
+    # status writers can write statuses
+    associate "Status Writer"   and "statuses"              with ["create_user_attribute", "assign_user_attribute", "associate", "associate_user_attribute"]
 
-            if contains(AUTHORIZED_STATUSES, status) {
-                assign      accountUA to    ["authorized"]
-                deassign    accountUA from  ["pending", "unauthorized"]
-            } else if contains(PENDING_STATUSES, status) {
-                assign      accountUA to    ["pending"]
-                deassign    accountUA from  ["authorized", "unauthorized"]
-            } else {
-                assign      accountUA to    ["unauthorized"]
-                deassign    accountUA from  ["authorized", "pending"]
-            }
+    create prohibition 'deny-pending-status-write'
+    deny user attribute 'pending'
+    access rights ["create_user_attribute", "assign_user_attribute", "associate", "associate_user_attribute"]
+    on union of ["statuses"]
+
+    function updateAccountStatus(string accountName, string status) {
+        let accountUA = accountUsersNodeName(accountName)
+
+        if contains(AUTHORIZED_STATUSES, status) {
+            assign      accountUA to    ["authorized"]
+            deassign    accountUA from  ["pending", "unauthorized"]
+        } else if contains(PENDING_STATUSES, status) {
+            assign      accountUA to    ["pending"]
+            deassign    accountUA from  ["authorized", "unauthorized"]
+        } else {
+            assign      accountUA to    ["unauthorized"]
+            deassign    accountUA from  ["authorized", "pending"]
         }
     }
 
@@ -89,22 +94,20 @@ create pc "Accounts"
 
     create oa ALL_ACCOUNTS in ["Accounts"]
 
-    create obligation "account" {
-        create rule "approve account"
-        when any user
-        performs ["approve_account"]
-        do(ctx) {
-            let accountName = ctx["event"]["accountName"]
-            let accountUA = accountUsersNodeName(accountName)
-            let accountOA = accountContainerNodeName(accountName)
-            let accountO = accountObjectNodeName(accountName)
+    associate "Blossom Admin" and ALL_ACCOUNTS_USERS with ["create_user_attribute", "assign_user", "associate_user_attribute"]
+    associate "Blossom Admin" and ALL_ACCOUNTS with ["create_object_attribute", "create_object", "associate_object_attribute"]
 
-            create ua accountUA in [ALL_ACCOUNTS_USERS, "pending"]
-            create oa accountOA in [ALL_ACCOUNTS]
-            create o accountO in [accountOA, "RBAC.accounts"]
+    function approveAccount(string accountName) {
+        let accountUA = accountUsersNodeName(accountName)
+        let accountOA = accountContainerNodeName(accountName)
+        let accountO = accountObjectNodeName(accountName)
 
-            associate accountUA and accountOA with ["*"]
-        }
+        create ua accountUA in [ALL_ACCOUNTS_USERS, "pending"]
+        create oa accountOA in [ALL_ACCOUNTS]
+        create o accountO in [accountOA, "RBAC.accounts"]
+
+        associate accountUA and accountOA with ["*"]
+
     }
 
 create pc "Voting"
@@ -115,37 +118,39 @@ create pc "Voting"
     # vote initiators will be assigned to this attribute and associated with their vote oa
     create ua "Vote Initiator" in ["Voting"]
 
-    create obligation "vote" {
-        create rule "initiate vote"
-        when any user
-        performs ["initiate_vote", "delete_vote", "complete_vote"]
-        do(ctx) {
-            let event           = ctx["eventName"]
-            let initiator       = ctx["event"]["initiatingMSP"]
-            let voteID          = ctx["event"]["id"]
-            let targetMember    = ctx["event"]["targetMember"]
+    associate "Blossom Admin" and "votes" with ["create_object_attribute", "create_object", "delete_object", "delete_object_attribute", "associate"]
+    associate "Blossom Admin" and "Vote Initiator" with ["assign_to_user_attribute", "associate", "delete_user_attribute"]
 
-            let initiatorUsers  = accountUsersNodeName(initiator)
-            let voteua          = concat([targetMember, "-", voteID, " initiator"])
-            let voteoa          = concat([targetMember, "-", voteID, " vote attr"])
-            let voteobj         = concat([targetMember, "-", voteID, " vote"])
+    function initiateVote(string initiator, string voteID, string targetMember) {
+        let initiatorUsers  = accountUsersNodeName(initiator)
+        let voteua          = concat([targetMember, "-", voteID, " initiator"])
+        let voteoa          = concat([targetMember, "-", voteID, " vote attr"])
+        let voteobj         = concat([targetMember, "-", voteID, " vote"])
 
-            if equals(event, "initiate_vote") {
-                create ua voteua in ["Vote Initiator"]
-                create oa voteoa in ["votes"]
-                create o voteobj in [voteoa, "RBAC.votes"]
-                associate voteua and voteoa with ["delete_vote", "complete_vote"]
+        create ua voteua in ["Vote Initiator"]
+        create oa voteoa in ["votes"]
+        create o voteobj in [voteoa, "RBAC.votes"]
+        associate voteua and voteoa with ["delete_vote", "complete_vote"]
 
-                assign initiatorUsers to [voteua]
-            } else if equals(event, "delete_vote") {
-                deassign initiator from [voteua]
-                delete ua voteua
-                delete o voteobj
-                delete oa voteoa
-            } else if equals(event, "complete_vote") {
-                dissociate voteua and voteoa
-            }
-        }
+        assign initiatorUsers to [voteua]
+    }
+
+    function deleteVote(string initiator, string voteID, string targetMember) {
+        let voteua          = concat([targetMember, "-", voteID, " initiator"])
+        let voteoa          = concat([targetMember, "-", voteID, " vote attr"])
+        let voteobj         = concat([targetMember, "-", voteID, " vote"])
+
+        deassign initiator from [voteua]
+        delete ua voteua
+        delete o voteobj
+        delete oa voteoa
+    }
+
+    function completeVote(string voteID, string targetMember) {
+        let voteua          = concat([targetMember, "-", voteID, " initiator"])
+        let voteoa          = concat([targetMember, "-", voteID, " vote attr"])
+
+        dissociate voteua and voteoa
     }
 
 # bootstrap adminmsp account
@@ -153,7 +158,7 @@ let adminmsp_users      = accountUsersNodeName(ADMINMSP)
 let adminmsp_container  = accountContainerNodeName(ADMINMSP)
 let adminmsp_object     = accountObjectNodeName(ADMINMSP)
 
-create ua adminmsp_users in ["Blossom Admin", ALL_ACCOUNTS_USERS, "authorized"]
+create ua adminmsp_users in [ALL_ACCOUNTS_USERS, "authorized"]
 
 create oa adminmsp_container in [ALL_ACCOUNTS]
 create o adminmsp_object in [ALL_ACCOUNTS, "RBAC.accounts"]
