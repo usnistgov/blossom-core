@@ -31,6 +31,20 @@ class BootstrapContractTest {
     }
 
     @Test
+    void testBootstrapTwice() throws PMException, IOException {
+        MockContext mockContext = new MockContext(MockIdentity.ORG1_SYSTEM_OWNER);
+        mockContext.getStub().addImplicitPrivateDataCollection(ORG1_MSP);
+        mockContext.getStub().addImplicitPrivateDataCollection(ORG2_MSP);
+        mockContext.getStub().addImplicitPrivateDataCollection(ORG3_MSP);
+
+        BootstrapContract blossomContract = new BootstrapContract();
+        blossomContract.Bootstrap(mockContext, "org1 test ato");
+        assertThrows(ChaincodeException.class, () -> blossomContract.Bootstrap(mockContext, "org1 test ato2"));
+
+        assertEquals("org1 test ato", new AccountContract().GetAccount(mockContext, ORG1_MSP).getAto());
+    }
+
+    @Test
     void testBootstrapWithoutATO() throws PMException, IOException {
         MockContext mockContext = new MockContext(MockIdentity.ORG1_SYSTEM_OWNER);
         BootstrapContract blossomContract = new BootstrapContract();
