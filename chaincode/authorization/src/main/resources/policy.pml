@@ -161,11 +161,13 @@ create pc "Status"
             assign      accountUA to    ["pending"]
             deassign    accountUA from  ["authorized", "unauthorized"]
 
+            delete prohibition initiateVoteDenyLabel(accountUA)
             denyInitiateVoteExceptOnSelf(accountUA, accountOA)
         } else {
             assign      accountUA to    ["unauthorized"]
             deassign    accountUA from  ["authorized", "pending"]
 
+            delete prohibition initiateVoteDenyLabel(accountUA)
             denyInitiateVoteExceptOnSelf(accountUA, accountOA)
         }
     }
@@ -179,3 +181,6 @@ create ua adminmsp_users in [ALL_ACCOUNTS_USERS, "authorized"]
 
 create oa adminmsp_container in [ALL_ACCOUNTS]
 create o adminmsp_object in [ALL_ACCOUNTS, "RBAC.accounts", "Status.accounts"]
+
+
+
