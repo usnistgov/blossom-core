@@ -1,22 +1,42 @@
 package model;
 
-import com.google.gson.Gson;
-import org.apache.commons.lang3.SerializationUtils;
+import com.owlike.genson.annotation.JsonProperty;
+import org.hyperledger.fabric.contract.annotation.DataType;
+import org.hyperledger.fabric.contract.annotation.Property;
 
 import java.io.Serializable;
+import java.util.Objects;
 
+@DataType
 public class Vote implements Serializable {
 
+    @Property
     private String id;
+
+    @Property
     private String initiatingMSP;
+
+    @Property
     private String targetMember;
+
+    @Property
     private Status statusChange;
+
+    @Property
     private String reason;
+
+    @Property
     private Threshold threshold;
+
+    @Property
     private int count;
+
+    @Property
     private Result result;
 
-    public Vote(String id, String initiatingMSP, String targetMember, Status statusChange, String reason, Threshold threshold, int count, Result result) {
+    public Vote(@JsonProperty String id, @JsonProperty String initiatingMSP, @JsonProperty String targetMember,
+                @JsonProperty Status statusChange, @JsonProperty String reason, @JsonProperty Threshold threshold,
+                @JsonProperty int count, @JsonProperty Result result) {
         this.id = id;
         this.initiatingMSP = initiatingMSP;
         this.targetMember = targetMember;
@@ -91,22 +111,6 @@ public class Vote implements Serializable {
         this.result = result;
     }
 
-    public byte[] toBytes() {
-        return SerializationUtils.serialize(this);
-    }
-
-    public static Vote fromBytes(byte[] bytes) {
-        return SerializationUtils.deserialize(bytes);
-    }
-
-    public String toJson() {
-        return new Gson().toJson(this);
-    }
-
-    public static Vote fromJson(String json) {
-        return new Gson().fromJson(json, Vote.class);
-    }
-
     public static boolean passed(int yes, int total, Threshold threshold) {
         return ((double) yes / total) > threshold.value;
     }
@@ -118,6 +122,19 @@ public class Vote implements Serializable {
         boolean majorityPossible = (double) (total-numVotes+yes)/total > threshold.value;
 
         return !isMajority && !majorityPossible;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Vote vote = (Vote) o;
+        return count == vote.count && Objects.equals(id, vote.id) && Objects.equals(initiatingMSP, vote.initiatingMSP) && Objects.equals(targetMember, vote.targetMember) && statusChange == vote.statusChange && Objects.equals(reason, vote.reason) && threshold == vote.threshold && result == vote.result;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, initiatingMSP, targetMember, statusChange, reason, threshold, count, result);
     }
 
     public enum Threshold {

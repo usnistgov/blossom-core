@@ -1,27 +1,36 @@
 package model;
 
-import com.google.gson.Gson;
-import org.apache.commons.lang3.SerializationUtils;
+import com.owlike.genson.annotation.JsonProperty;
+import org.hyperledger.fabric.contract.annotation.DataType;
+import org.hyperledger.fabric.contract.annotation.Property;
 
 import java.io.Serializable;
+import java.util.Objects;
 
+@DataType
 public class Account implements Serializable {
-    private String name;
+
+    @Property
+    private String id;
+
+    @Property
     private Status status;
+
+    @Property
     private String ato;
 
-    public Account(String name, Status status, String ato) {
-        this.name = name;
+    public Account(@JsonProperty String id, @JsonProperty Status status, @JsonProperty String ato) {
+        this.id = id;
         this.status = status;
         this.ato = ato;
     }
 
-    public String getName() {
-        return name;
+    public String getId() {
+        return id;
     }
 
-    public void setName(String name) {
-        this.name = name;
+    public void setId(String id) {
+        this.id = id;
     }
 
     public Status getStatus() {
@@ -40,19 +49,25 @@ public class Account implements Serializable {
         this.ato = ato;
     }
 
-    public byte[] toBytes() {
-        return SerializationUtils.serialize(this);
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Account account = (Account) o;
+        return Objects.equals(id, account.id) && status == account.status && Objects.equals(ato, account.ato);
     }
 
-    public static Account fromBytes(byte[] bytes) {
-        return SerializationUtils.deserialize(bytes);
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, status, ato);
     }
 
-    public String toJson() {
-        return new Gson().toJson(this);
-    }
-
-    public static Account fromJson(String json) {
-        return new Gson().fromJson(json, Account.class);
+    @Override
+    public String toString() {
+        return "Account{" +
+                "id='" + id + '\'' +
+                ", status=" + status +
+                ", ato='" + ato + '\'' +
+                '}';
     }
 }

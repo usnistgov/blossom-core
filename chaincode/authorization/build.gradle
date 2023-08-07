@@ -15,9 +15,8 @@ dependencies {
 
     implementation 'org.hyperledger.fabric-chaincode-java:fabric-chaincode-shim:2.2.+'
     implementation 'org.json:json:+'
-    implementation 'com.owlike:genson:1.5'
-    implementation 'com.github.PM-Master:policy-machine-core:a787f3e'
-    implementation 'org.projectlombok:lombok:1.18.18'
+    implementation 'com.github.PM-Master:policy-machine-core:d25847b'
+    implementation 'com.github.usnistgov.blossom.chaincode:common:0.1'
     testImplementation 'org.hyperledger.fabric-chaincode-java:fabric-chaincode-shim:2.2.+'
     testImplementation 'org.junit.jupiter:junit-jupiter:5.4.2'
     testImplementation 'org.assertj:assertj-core:3.11.1'
@@ -28,10 +27,11 @@ repositories {
     maven {
         url "https://hyperledger.jfrog.io/hyperledger/fabric-maven"
     }
-    jcenter()
     maven {
         url 'https://jitpack.io'
     }
+    jcenter()
+    mavenLocal()
 }
 
 application {
@@ -54,18 +54,6 @@ checkstyleTest {
 jacocoTestReport {
     dependsOn test
 }
-
-/*jacocoTestCoverageVerification {
-    violationRules {
-        rule {
-            limit {
-                minimum = 0.9
-            }
-        }
-    }
-
-    finalizedBy jacocoTestReport
-}*/
 
 test {
     useJUnitPlatform()

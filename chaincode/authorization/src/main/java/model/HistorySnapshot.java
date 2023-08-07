@@ -1,16 +1,24 @@
 package model;
 
-import com.google.gson.Gson;
+import com.owlike.genson.annotation.JsonProperty;
+import org.hyperledger.fabric.contract.annotation.DataType;
+import org.hyperledger.fabric.contract.annotation.Property;
 
 import java.io.Serializable;
 
+@DataType
 public class HistorySnapshot implements Serializable {
 
+    @Property
     private String txID;
+
+    @Property
     private String timestamp;
+
+    @Property
     private Account account;
 
-    public HistorySnapshot(String txID, String timestamp, Account account) {
+    public HistorySnapshot(@JsonProperty String txID, @JsonProperty String timestamp, @JsonProperty Account account) {
         this.txID = txID;
         this.timestamp = timestamp;
         this.account = account;
@@ -40,7 +48,4 @@ public class HistorySnapshot implements Serializable {
         this.account = account;
     }
 
-    public String toJson() {
-        return new Gson().toJson(this);
-    }
 }
