@@ -7,6 +7,7 @@ import model.Vote;
 import ngac.BlossomPDP;
 import org.apache.commons.lang3.SerializationUtils;
 import org.hyperledger.fabric.contract.Context;
+import org.hyperledger.fabric.contract.ContractInterface;
 import org.hyperledger.fabric.contract.annotation.Contract;
 import org.hyperledger.fabric.contract.annotation.Info;
 import org.hyperledger.fabric.contract.annotation.Transaction;
@@ -32,7 +33,7 @@ import static ngac.BlossomPDP.getAdminMSPID;
                 version = "0.0.1"
         )
 )
-public class VoteContract {
+public class VoteContract implements ContractInterface {
 
     /**
      * Prefix used for building vote keys.
@@ -42,7 +43,7 @@ public class VoteContract {
     private BlossomPDP pdp = new BlossomPDP();
 
     @Transaction
-    public Vote TestGet() {
+    public Vote TestGet(Context ctx) {
         return new Vote("123", "321", "123", Status.UNAUTHORIZED_ATO, "reason",
                 Vote.Threshold.MAJORITY, 4, Vote.Result.ONGOING);
     }

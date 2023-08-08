@@ -1,7 +1,7 @@
 package mock;
 
-import com.owlike.genson.Genson;
 import model.Status;
+import org.apache.commons.lang3.SerializationUtils;
 import org.hyperledger.fabric.protos.peer.ChaincodeEventPackage;
 import org.hyperledger.fabric.protos.peer.ProposalPackage;
 import org.hyperledger.fabric.shim.Chaincode;
@@ -51,7 +51,7 @@ public class MockChaincodeStub implements ChaincodeStub {
         getAccountStatusResponse = new Chaincode.Response(
                 200,
                 "success",
-                new Genson().serializeBytes(status)
+                SerializationUtils.serialize(status)
         );
     }
 

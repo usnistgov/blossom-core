@@ -10,11 +10,10 @@ group 'authorization'
 version '0.0.1'
 
 dependencies {
+    implementation project(":common")
     implementation 'org.hyperledger.fabric-chaincode-java:fabric-chaincode-shim:2.2.+'
     implementation 'org.json:json:+'
     implementation 'com.github.PM-Master:policy-machine-core:d25847b'
-
-    // testImplementation project(":common")
 
     testImplementation 'org.hyperledger.fabric-chaincode-java:fabric-chaincode-shim:2.2.+'
     testImplementation 'org.junit.jupiter:junit-jupiter:5.4.2'

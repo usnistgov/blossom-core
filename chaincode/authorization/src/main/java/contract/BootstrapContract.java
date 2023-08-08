@@ -8,6 +8,7 @@ import ngac.BlossomPDP;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.SerializationUtils;
 import org.hyperledger.fabric.contract.Context;
+import org.hyperledger.fabric.contract.ContractInterface;
 import org.hyperledger.fabric.contract.annotation.Contract;
 import org.hyperledger.fabric.contract.annotation.Info;
 import org.hyperledger.fabric.contract.annotation.Transaction;
@@ -30,7 +31,7 @@ import static contract.AccountContract.accountKey;
                 version = "0.0.1"
         )
 )
-public class BootstrapContract {
+public class BootstrapContract implements ContractInterface {
 
     /**
      * Bootstrap the blossom authorization chaincode by initializing the NGAC policy and setting up the Blossom Admin
@@ -38,6 +39,8 @@ public class BootstrapContract {
      * to "AUTHORIZED". Once additional members are added to Blossom, those members may vote (using a super majority) to
      * rescind the Blossom Admin's authorized status if the ATO provided during bootstrapping is not satisfactory.
      * Only a users from the AdminMSP defined in policy.pml can call this method. This method can only be called once.
+     *
+     * NGAC: Only a System Owner from the Blossom Admin member can call this function.
      *
      * @param ctx Chaincode context which stores the requesting CID and exposes world state functions.
      * @param ato The ATO for the Blossom Admin member account.

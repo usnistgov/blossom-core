@@ -7,6 +7,7 @@ import model.Status;
 import ngac.BlossomPDP;
 import org.apache.commons.lang3.SerializationUtils;
 import org.hyperledger.fabric.contract.Context;
+import org.hyperledger.fabric.contract.ContractInterface;
 import org.hyperledger.fabric.contract.annotation.Contract;
 import org.hyperledger.fabric.contract.annotation.Info;
 import org.hyperledger.fabric.contract.annotation.Transaction;
@@ -30,7 +31,7 @@ import java.util.List;
                 version = "0.0.1"
         )
 )
-public class AccountContract {
+public class AccountContract implements ContractInterface {
 
     /**
      * Prefix used when writing accounts to the Fabric ledger
@@ -40,7 +41,7 @@ public class AccountContract {
     private BlossomPDP pdp = new BlossomPDP();
 
     @Transaction
-    public Account TestGet() {
+    public Account TestGet(Context ctx) {
         return new Account("123", Status.AUTHORIZED, "atooo");
     }
 

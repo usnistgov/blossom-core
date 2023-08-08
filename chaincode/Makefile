@@ -1,11 +1,10 @@
-clean:
-	rm -r -f ./auth/build
+clean-auth-cc:
+	rm -r -f ./authorization/build
 
-build-auth:
-	cd auth && \
-	  docker build -t gradle-build-consent-chaincode-image . && \
-	  mkdir -p build && \
-	  docker create -ti --name gradle-build-consent-chaincode gradle-build-consent-chaincode-image bash && \
-	  docker cp gradle-build-consent-chaincode:/app/build/. build && \
-	  docker rm gradle-build-consent-chaincode && \
-	  docker rmi gradle-build-consent-chaincode-image
+build-auth-cc:
+	  docker build -t gradle-build-authorization-chaincode-image --build-arg CC_NAME=authorization . && \
+	  mkdir -p authorization/build && \
+	  docker create -ti --name gradle-build-authorization-chaincode gradle-build-authorization-chaincode-image bash && \
+	  docker cp gradle-build-authorization-chaincode:/authorization/build/. authorization/build && \
+	  docker rm gradle-build-authorization-chaincode && \
+	  docker rmi gradle-build-authorization-chaincode-image
