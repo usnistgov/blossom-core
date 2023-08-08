@@ -1,11 +1,13 @@
 package contract;
 
+import gov.nist.csd.pm.pap.PAP;
+import gov.nist.csd.pm.pap.memory.MemoryPolicyStore;
 import gov.nist.csd.pm.policy.exceptions.PMException;
+import gov.nist.csd.pm.policy.model.access.UserContext;
 import mock.MockContext;
 import mock.MockIdentity;
 import model.Account;
 import model.Status;
-import ngac.BlossomPDP;
 import org.apache.commons.lang3.SerializationUtils;
 import org.hyperledger.fabric.contract.Context;
 import org.hyperledger.fabric.shim.ChaincodeException;
@@ -13,12 +15,13 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.Map;
 
 import static contract.AccountContract.accountKey;
 import static contract.MockContextUtil.buildTestMockContextWithAccounts;
 import static mock.MockOrgs.*;
+import static ngac.BlossomPDP.loadPolicy;
 import static org.junit.jupiter.api.Assertions.*;
 
 class AccountContractTest {
@@ -26,7 +29,7 @@ class AccountContractTest {
     private AccountContract contract = new AccountContract();
 
     static void updateAccountStatus(AccountContract contract, Context ctx, String mspid, String statusStr) throws Exception {
-        new BlossomPDP().updateAccountStatus(ctx, mspid, statusStr);
+        updateAccountStatus(ctx, mspid, statusStr);
 
         // check the provided status is valid
         Status status = Status.fromString(statusStr);
@@ -37,6 +40,16 @@ class AccountContractTest {
 
         // update the account
         ctx.getStub().putState(accountKey(mspid), SerializationUtils.serialize(account));
+    }
+
+    private static void updateAccountStatus(Context ctx, String account, String status) throws PMException {
+        MemoryPolicyStore memoryPolicyStore = loadPolicy(ctx);
+
+        PAP pap = new PAP(memoryPolicyStore);
+        String pml = String.format("updateAccountStatus('%s', '%s')", account, status);
+        pap.executePML(new UserContext("blossom admin"), pml);
+
+        ctx.getStub().putState("policy", memoryPolicyStore.serialize().toJSON().getBytes(StandardCharsets.UTF_8));
     }
     
     @Nested
@@ -176,44 +189,6 @@ class AccountContractTest {
             assertThrows(ChaincodeException.class, () -> contract.UploadATO(mockCtx, null));
             assertThrows(ChaincodeException.class, () -> contract.UploadATO(mockCtx, ""));
         }
-    }
-
-    @Nested
-    class UpdateAccountStatus {
-
-        @Test
-        void testAuthorizedUser() throws Exception {
-            MockContext ctx = buildTestMockContextWithAccounts();
-
-            updateAccountStatus(contract, ctx, ORG2_MSP, Status.AUTHORIZED.name());
-
-            Account account = contract.GetAccount(ctx, ORG2_MSP);
-            assertEquals(Status.AUTHORIZED, account.getStatus());
-        }
-
-        @Test
-        void testUnauthorizedUser() throws Exception {
-            MockContext ctx = buildTestMockContextWithAccounts();
-
-            ctx.setClientIdentity(MockIdentity.ORG1_NON_ADMIN);
-            assertThrows(PMException.class, () -> updateAccountStatus(contract, ctx, ORG2_MSP, Status.AUTHORIZED.name()));
-
-            Account account = contract.GetAccount(ctx, ORG2_MSP);
-            assertEquals(Status.PENDING_ATO, account.getStatus());
-        }
-
-        @Test
-        void testBlossomAdminUpdatesBlossomAdminStatus() throws Exception {
-            MockContext ctx = buildTestMockContextWithAccounts();
-
-            updateAccountStatus(contract, ctx, ORG1_MSP, Status.UNAUTHORIZED_ATO.name());
-
-            Account account = contract.GetAccount(ctx, ORG1_MSP);
-            assertEquals(Status.UNAUTHORIZED_ATO, account.getStatus());
-
-            assertThrows(PMException.class, () -> updateAccountStatus(contract, ctx, ORG1_MSP, Status.AUTHORIZED.name()));
-        }
-
     }
 
     @Nested

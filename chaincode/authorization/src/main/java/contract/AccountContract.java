@@ -19,15 +19,30 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Chaincode functions to manage Blossom accounts.
+ */
 @Contract(
         name = "account",
-        info = @Info(title = "Blossom Authorization Account Contract", version = "0.0.1")
+        info = @Info(
+                title = "Blossom Authorization Account Contract",
+                description = "Chaincode functions to manage Blossom accounts",
+                version = "0.0.1"
+        )
 )
 public class AccountContract {
 
-    public static final String ACCOUNT_PREFIX = "account:";
-    
+    /**
+     * Prefix used when writing accounts to the Fabric ledger
+     */
+    private static final String ACCOUNT_PREFIX = "account:";
+
     private BlossomPDP pdp = new BlossomPDP();
+
+    @Transaction
+    public Account TestGet() {
+        return new Account("123", Status.AUTHORIZED, "atooo");
+    }
 
     /**
      * Request a blossom account. The account name will be the MSPID extracted from the CID in the Context. When an account
@@ -98,6 +113,7 @@ public class AccountContract {
      * NGAC: Only users with the "System Administrator" can upload an ATO.
      *
      * @param ctx Chaincode context which stores the requesting CID and exposes world state functions.
+     * @param ato The ATO value to upload.
      * @throws PMException if the requesting CID does not have the upload_ato permission on the account.
      * @throws ChaincodeException if no ato has been provided in the transient field of the Context.
      */
@@ -208,6 +224,9 @@ public class AccountContract {
         return historySnapshots;
     }
 
+    /**
+     * builds the key for writing the account to the ledger
+     */
     static String accountKey(String mspid) {
         return ACCOUNT_PREFIX + mspid;
     }

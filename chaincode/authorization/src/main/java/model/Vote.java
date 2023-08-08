@@ -1,44 +1,71 @@
 package model;
 
-import com.owlike.genson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.hyperledger.fabric.contract.annotation.DataType;
 import org.hyperledger.fabric.contract.annotation.Property;
 
 import java.io.Serializable;
 import java.util.Objects;
 
+/**
+ * Blossom status change vote.
+ */
 @DataType
 public class Vote implements Serializable {
 
+    /**
+     * The ID of the vote.
+     */
     @Property
     private String id;
 
+    /**
+     * The Fabric MSPID that initiated the vote.
+     */
     @Property
-    private String initiatingMSP;
+    private String initiatingMSPID;
 
+    /**
+     * The target member of the vote.
+     */
     @Property
     private String targetMember;
 
+    /**
+     * The intended status change if the vote passes.
+     */
     @Property
     private Status statusChange;
 
+    /**
+     * The reason for the status change.
+     */
     @Property
     private String reason;
 
+    /**
+     * The threshold required for the vote to pass.
+     */
     @Property
     private Threshold threshold;
 
+    /**
+     * The current number of members that have cast their vote.
+     */
     @Property
     private int count;
 
+    /**
+     * Result of the vote.
+     */
     @Property
     private Result result;
 
-    public Vote(@JsonProperty String id, @JsonProperty String initiatingMSP, @JsonProperty String targetMember,
+    public Vote(@JsonProperty String id, @JsonProperty String initiatingMSPID, @JsonProperty String targetMember,
                 @JsonProperty Status statusChange, @JsonProperty String reason, @JsonProperty Threshold threshold,
                 @JsonProperty int count, @JsonProperty Result result) {
         this.id = id;
-        this.initiatingMSP = initiatingMSP;
+        this.initiatingMSPID = initiatingMSPID;
         this.targetMember = targetMember;
         this.statusChange = statusChange;
         this.reason = reason;
@@ -55,12 +82,12 @@ public class Vote implements Serializable {
         this.id = id;
     }
 
-    public String getInitiatingMSP() {
-        return initiatingMSP;
+    public String getInitiatingMSPID() {
+        return initiatingMSPID;
     }
 
-    public void setInitiatingMSP(String initiatingMSP) {
-        this.initiatingMSP = initiatingMSP;
+    public void setInitiatingMSPID(String initiatingMSPID) {
+        this.initiatingMSPID = initiatingMSPID;
     }
 
     public String getTargetMember() {
@@ -129,16 +156,26 @@ public class Vote implements Serializable {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         Vote vote = (Vote) o;
-        return count == vote.count && Objects.equals(id, vote.id) && Objects.equals(initiatingMSP, vote.initiatingMSP) && Objects.equals(targetMember, vote.targetMember) && statusChange == vote.statusChange && Objects.equals(reason, vote.reason) && threshold == vote.threshold && result == vote.result;
+        return count == vote.count && Objects.equals(id, vote.id) && Objects.equals(initiatingMSPID, vote.initiatingMSPID) && Objects.equals(targetMember, vote.targetMember) && statusChange == vote.statusChange && Objects.equals(reason, vote.reason) && threshold == vote.threshold && result == vote.result;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, initiatingMSP, targetMember, statusChange, reason, threshold, count, result);
+        return Objects.hash(id, initiatingMSPID, targetMember, statusChange, reason, threshold, count, result);
     }
 
+    /**
+     * Threshold for a vote
+     */
     public enum Threshold {
+        /**
+         * Majority requires > 50%
+         */
         MAJORITY(.5),
+
+        /**
+         * Super majority requires > 66%
+         */
         SUPER_MAJORITY(.66);
 
         private double value;
@@ -148,14 +185,21 @@ public class Vote implements Serializable {
         }
     }
 
+    /**
+     * Possible results of votes
+     */
     public enum Result {
+        /**
+         * The vote has not yet been completed
+         */
         ONGOING,
+        /**
+         * The vote passed
+         */
         PASSED,
+        /**
+         * The vote failed
+         */
         FAILED
-    }
-
-    public enum Option {
-        YES,
-        NO
     }
 }

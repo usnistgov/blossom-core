@@ -21,15 +21,31 @@ import java.util.List;
 import static contract.AccountContract.accountKey;
 import static ngac.BlossomPDP.getAdminMSPID;
 
+/**
+ * Chaincode functions to support voting on account statuses.
+ */
 @Contract(
         name = "vote",
-        info = @Info(title = "Blossom Authorization Vote Contract", version = "0.0.1")
+        info = @Info(
+                title = "Blossom Authorization Vote Contract",
+                description = "Chaincode functions to support voting on account statuses",
+                version = "0.0.1"
+        )
 )
 public class VoteContract {
 
-    public static final String VOTE_PREFIX = "vote:";
-    
+    /**
+     * Prefix used for building vote keys.
+     */
+    private static final String VOTE_PREFIX = "vote:";
+
     private BlossomPDP pdp = new BlossomPDP();
+
+    @Transaction
+    public Vote TestGet() {
+        return new Vote("123", "321", "123", Status.UNAUTHORIZED_ATO, "reason",
+                Vote.Threshold.MAJORITY, 4, Vote.Result.ONGOING);
+    }
 
     /**
      * Initiate a vote to change the status of a Blossom member.
@@ -358,7 +374,7 @@ public class VoteContract {
      * NGAC: none.
      *
      * @param ctx Chaincode context which stores the requesting CID and exposes world state functions.
-     * @param mspid
+     * @param mspid The MSPID of the target member to get the ongoing vote for.
      * @return The ongoing vote fot the target member
      * @throws ChaincodeException If there is no ongoing vote for the given member.
      */
@@ -376,6 +392,12 @@ public class VoteContract {
         throw new ChaincodeException("there is no ongoing vote for member=" + mspid);
     }
 
+    /**
+     * Builds a key to write to the Fabric ledger.
+     *
+     * VOTE_PREFIX:targetMember:id
+     *
+     */
     private String voteKey(String id, String targetMember) {
         return VOTE_PREFIX + (targetMember != null && !targetMember.isEmpty() ? targetMember + ":" : "") + id;
     }

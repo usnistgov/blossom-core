@@ -1,21 +1,33 @@
 package model;
 
-import com.owlike.genson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.hyperledger.fabric.contract.annotation.DataType;
 import org.hyperledger.fabric.contract.annotation.Property;
 
 import java.io.Serializable;
 import java.util.Objects;
 
+/**
+ * Blossom account information.
+ */
 @DataType
 public class Account implements Serializable {
 
+    /**
+     * Account ID (Fabric member MSPID)
+     */
     @Property
     private String id;
 
+    /**
+     * Current account status
+     */
     @Property
     private Status status;
 
+    /**
+     * Account ATO attestation
+     */
     @Property
     private String ato;
 

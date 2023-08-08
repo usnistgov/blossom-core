@@ -19,9 +19,16 @@ import java.nio.charset.StandardCharsets;
 
 import static contract.AccountContract.accountKey;
 
+/**
+ * Chaincode functions to bootstrap the Blossom system.
+ */
 @Contract(
         name = "bootstrap",
-        info = @Info(title = "Blossom bootstrap contract", version = "0.0.1")
+        info = @Info(
+                title = "Blossom bootstrap contract",
+                description = "Chaincode functions to bootstrap the Blossom system",
+                version = "0.0.1"
+        )
 )
 public class BootstrapContract {
 

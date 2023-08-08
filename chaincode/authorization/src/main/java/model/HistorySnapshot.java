@@ -1,20 +1,32 @@
 package model;
 
-import com.owlike.genson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.hyperledger.fabric.contract.annotation.DataType;
 import org.hyperledger.fabric.contract.annotation.Property;
 
 import java.io.Serializable;
 
+/**
+ * Snapshot of Blossom account.
+ */
 @DataType
 public class HistorySnapshot implements Serializable {
 
+    /**
+     * Fabric transaction ID.
+     */
     @Property
     private String txID;
 
+    /**
+     * Fabric transaction timestamp.
+     */
     @Property
     private String timestamp;
 
+    /**
+     * Account details for this snapshot.
+     */
     @Property
     private Account account;
 
