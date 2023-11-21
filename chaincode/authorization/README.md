@@ -6,3 +6,26 @@ peer chaincode query -o localhost:7050 --ordererTLSHostnameOverride orderer.exam
 
 
 ## Common Workflows
+### Bootstrap
+
+- bootstrap:Bootstrap
+- mou:UpdateMOU
+
+### Joining
+
+- mou:GetMOU
+- mou:SignMOU
+- mou:Join
+
+### ATO Process
+
+- ato:CreateATO
+- ato:SubmitFeedback
+- ato:UpdateATO
+- ato:SubmitFeedback
+
+### Voting
+
+- vote:InitiateVote
+- vote:Vote
+- vote:CertifyVote

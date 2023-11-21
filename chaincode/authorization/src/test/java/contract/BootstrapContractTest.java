@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.util.List;
 
 import static contract.AccountContract.accountKey;
+import static contract.VoteContract.VOTE_CONFIG_KEY;
 import static mock.MockOrgs.*;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -53,5 +54,18 @@ class BootstrapContractTest {
         assertEquals(new ATO(
                 "123", now.toString(), now.toString(), 1, "org1 test ato", "artifacts", List.of()
         ), new AccountContract().GetAccount(mockContext, ORG1_MSP).getAto());
+    }
+
+    @Test
+    void testBootstrapSetsDefaultVoteConfig() {
+        MockContext mockContext = new MockContext(MockIdentity.ORG1_AO);
+        BootstrapContract bootstrapContract = new BootstrapContract();
+        mockContext.setTimestamp(Instant.now());
+        bootstrapContract.Bootstrap(mockContext,"org1 test ato", "artifacts");
+        VoteConfiguration actual = new VoteContract().GetVoteConfiguration(mockContext);
+        assertEquals(
+                new VoteConfiguration(true, true, true, false),
+                actual
+        );
     }
 }

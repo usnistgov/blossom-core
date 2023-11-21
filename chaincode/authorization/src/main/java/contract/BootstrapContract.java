@@ -37,6 +37,10 @@ import static contract.AccountContract.accountKey;
 )
 public class BootstrapContract implements ContractInterface {
 
+    public static VoteConfiguration DEFAULT_VOTE_CONFIG = new VoteConfiguration(
+            true, true, true, false
+    );
+
     @Transaction
     public String Get(Context ctx, String key) {
         return new String(ctx.getStub().getState(key));
@@ -90,5 +94,8 @@ public class BootstrapContract implements ContractInterface {
         String mspid = ctx.getClientIdentity().getMSPID();
         Account account = new Account(mspid, Status.AUTHORIZED, ATO.createFromContext(ctx, ato, artifacts), 0);
         ctx.getStub().putState(accountKey(mspid), SerializationUtils.serialize(account));
+
+        // put default vote configuration on ledger
+        new VoteContract().UpdateVoteConfiguration(ctx, DEFAULT_VOTE_CONFIG);
     }
 }

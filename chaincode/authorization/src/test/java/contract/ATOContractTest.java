@@ -84,16 +84,16 @@ public class ATOContractTest {
         void testUnauthorized() throws Exception {
             MockContext mockCtx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG2_NON_AO);
 
-            PMException e =
-                    assertThrows(PMException.class, () -> contract.CreateATO(mockCtx, "memo", "artifacts"));
+            ChaincodeException e =
+                    assertThrows(ChaincodeException.class, () -> contract.CreateATO(mockCtx, "memo", "artifacts"));
             assertEquals("unknown user role: System Administrator", e.getMessage());
         }
 
         @Test
         void testBeforeJoinThrowsException() throws Exception {
             MockContext mockCtx = newTestMockContextWithOneAccount(MockIdentity.ORG3_AO);
-            PMException e = assertThrows(
-                    PMException.class, () -> contract.CreateATO(mockCtx, "memo", "artifacts")
+            ChaincodeException e = assertThrows(
+                    ChaincodeException.class, () -> contract.CreateATO(mockCtx, "memo", "artifacts")
             );
             assertEquals("account Org3MSP has not yet joined", e.getMessage());
         }
@@ -141,16 +141,16 @@ public class ATOContractTest {
 
             mockCtx.setClientIdentity(MockIdentity.ORG2_NON_AO);
 
-            PMException e =
-                    assertThrows(PMException.class, () -> contract.UpdateATO(mockCtx, "memo", "artifacts"));
+            ChaincodeException e =
+                    assertThrows(ChaincodeException.class, () -> contract.UpdateATO(mockCtx, "memo", "artifacts"));
             assertEquals("unknown user role: System Administrator", e.getMessage());
         }
 
         @Test
         void testBeforeJoinThrowsException() throws Exception {
             MockContext mockCtx = newTestMockContextWithOneAccount(MockIdentity.ORG3_AO);
-            PMException e = assertThrows(
-                    PMException.class, () -> contract.CreateATO(mockCtx, "memo", "artifacts")
+            ChaincodeException e = assertThrows(
+                    ChaincodeException.class, () -> contract.CreateATO(mockCtx, "memo", "artifacts")
             );
             assertEquals("account Org3MSP has not yet joined", e.getMessage());
         }
@@ -323,8 +323,8 @@ public class ATOContractTest {
 
             mockCtx.setClientIdentity(MockIdentity.ORG2_NON_AO);
 
-            PMException e =
-                    assertThrows(PMException.class, () -> contract.SubmitFeedback(mockCtx, "Org1MSP", 1, ""));
+            ChaincodeException e =
+                    assertThrows(ChaincodeException.class, () -> contract.SubmitFeedback(mockCtx, "Org1MSP", 1, ""));
             assertEquals("unknown user role: System Administrator", e.getMessage());
         }
 

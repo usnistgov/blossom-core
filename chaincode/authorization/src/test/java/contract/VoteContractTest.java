@@ -60,14 +60,14 @@ class VoteContractTest {
         void testUserUnauthorized() throws Exception {
             MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
             VoteConfiguration expected = new VoteConfiguration(false, false, false, false);
-            assertThrows(UnauthorizedException.class, () -> voteContract.UpdateVoteConfiguration(ctx, expected));
+            assertThrows(ChaincodeException.class, () -> voteContract.UpdateVoteConfiguration(ctx, expected));
         }
 
         @Test
         void testBlossomAdminAccountUnauthorized() throws Exception {
             MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
             updateAccountStatus(ctx, "Org1MSP", PENDING.toString());
-            assertThrows(UnauthorizedException.class,
+            assertThrows(ChaincodeException.class,
                          () -> voteContract.UpdateVoteConfiguration(ctx, new VoteConfiguration(false, false, false, false)));
         }
 

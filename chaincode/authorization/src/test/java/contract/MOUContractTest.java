@@ -48,7 +48,7 @@ class MOUContractTest {
             MockContext mockCtx = MockContextUtil.newTestContext(MockIdentity.ORG1_AO);
 
             updateAccountStatus(mockCtx, "Org1MSP", PENDING.toString());
-            assertThrows(UnauthorizedException.class, () -> contract.UpdateMOU(mockCtx, "test mou"));
+            assertThrows(ChaincodeException.class, () -> contract.UpdateMOU(mockCtx, "test mou"));
 
             updateAccountStatus(mockCtx, "Org1MSP", AUTHORIZED.toString());
             assertDoesNotThrow(() -> contract.UpdateMOU(mockCtx, "test mou"));
@@ -158,7 +158,7 @@ class MOUContractTest {
         @Test
         void testUnauthorized() throws PMException, IOException {
             MockContext mockCtx = MockContextUtil.newTestContext(MockIdentity.ORG1_NON_AO);
-            assertThrows(PMException.class, () -> contract.SignMOU(mockCtx, 1));
+            assertThrows(ChaincodeException.class, () -> contract.SignMOU(mockCtx, 1));
         }
 
         @Test

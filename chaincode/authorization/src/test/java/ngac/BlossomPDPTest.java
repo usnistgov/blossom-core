@@ -319,7 +319,7 @@ class BlossomPDPTest {
             ctx.setClientIdentity(MockIdentity.ORG2_AO);
 
             updateAccountStatus(ctx, ORG2_MSP, PENDING.toString());
-            assertThrows(UnauthorizedException.class,
+            assertThrows(ChaincodeException.class,
                          () -> voteContract.Vote(ctx, "123", ORG3_MSP, true));
 
             ctx.setClientIdentity(MockIdentity.ORG1_AO);
@@ -350,14 +350,14 @@ class BlossomPDPTest {
             voteContract.UpdateVoteConfiguration(ctx, new VoteConfiguration(false, false, false, false));
 
             ctx.setClientIdentity(MockIdentity.ORG2_AO);
-            assertThrows(UnauthorizedException.class, () -> voteContract.InitiateVote(ctx, ORG1_MSP, AUTHORIZED.toString(), ""));
-            assertThrows(UnauthorizedException.class, () -> voteContract.InitiateVote(ctx, ORG2_MSP, AUTHORIZED.toString(), ""));
+            assertThrows(ChaincodeException.class, () -> voteContract.InitiateVote(ctx, ORG1_MSP, AUTHORIZED.toString(), ""));
+            assertThrows(ChaincodeException.class, () -> voteContract.InitiateVote(ctx, ORG2_MSP, AUTHORIZED.toString(), ""));
 
             ctx.setClientIdentity(MockIdentity.ORG1_AO);
             voteContract.UpdateVoteConfiguration(ctx, new VoteConfiguration(false, false, true, false));
 
             ctx.setClientIdentity(MockIdentity.ORG2_AO);
-            assertThrows(UnauthorizedException.class, () -> voteContract.InitiateVote(ctx, ORG1_MSP, AUTHORIZED.toString(), ""));
+            assertThrows(ChaincodeException.class, () -> voteContract.InitiateVote(ctx, ORG1_MSP, AUTHORIZED.toString(), ""));
             assertDoesNotThrow(() -> voteContract.InitiateVote(ctx, ORG2_MSP, AUTHORIZED.toString(), ""));
         }
 
