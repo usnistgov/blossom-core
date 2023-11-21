@@ -20,6 +20,7 @@ import org.hyperledger.fabric.shim.ChaincodeException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 
 import static contract.AccountContract.accountKey;
 
@@ -36,6 +37,11 @@ import static contract.AccountContract.accountKey;
 )
 public class BootstrapContract implements ContractInterface {
 
+    @Transaction
+    public String Get(Context ctx, String key) {
+        return new String(ctx.getStub().getState(key));
+    }
+
     /**
      * Bootstrap the Blossom authorization chaincode by initializing the NGAC policy. The account identified by the ADMINMSP
      * constant in the policy.pml file will automatically be set to AUTHORIZED. Once additional members are added to the
@@ -46,29 +52,36 @@ public class BootstrapContract implements ContractInterface {
      *
      * @param ctx Chaincode context which stores the requesting CID and exposes world state functions.
      * @param ato The ATO for the Blossom Admin member account.
-     * @throws PMException If there is an error building the initial NGAC policy configuration.
-     * @throws IOException If there is an error reading the policy file.
+     * @throws ChaincodeException If the Bootstrap method has already been called.
+     * @throws ChaincodeException If there is an error building the initial NGAC policy configuration.
+     * @throws ChaincodeException If there is an error reading the policy file.
      */
     @Transaction()
-    public void Bootstrap(Context ctx, VoteConfiguration voteConfiguration, String ato, String artifacts) throws PMException, IOException {
+    public void Bootstrap(Context ctx, String ato, String artifacts) {
         // check if this has been called already by checking if the policy has already been created
-        if (ctx.getStub().getState("policy") != null) {
+        byte[] policyBytes = ctx.getStub().getState("policy");
+        if (policyBytes != null && policyBytes.length > 0) {
             throw new ChaincodeException("Bootstrap already called");
         }
 
         // get the policy file defined in PML
         InputStream resourceAsStream = getClass().getClassLoader().getResourceAsStream("policy.pml");
         if (resourceAsStream == null) {
-            throw new PMException("could not read policy file");
+            throw new ChaincodeException("could not read policy file");
         }
 
-        String pml = IOUtils.toString(resourceAsStream, StandardCharsets.UTF_8);
+        String json;
+        try {
+            String pml = IOUtils.toString(resourceAsStream, StandardCharsets.UTF_8);
 
-        PAP pap = new BlossomPDP().bootstrap(ctx, pml);
+            PAP pap = new BlossomPDP().bootstrap(ctx, pml);
 
-        // serialize to json to store on ledger, this will be faster to deserialize for subsequent
-        // policy requests than storing in PML
-        String json = pap.serialize(new JSONSerializer());
+            // serialize to json to store on ledger, this will be faster to deserialize for subsequent
+            // policy requests than storing in PML
+            json = pap.serialize(new JSONSerializer());
+        } catch (IOException | PMException e) {
+            throw new ChaincodeException(e);
+        }
 
         // put policy on ledger
         ctx.getStub().putState("policy", json.getBytes(StandardCharsets.UTF_8));
@@ -77,8 +90,5 @@ public class BootstrapContract implements ContractInterface {
         String mspid = ctx.getClientIdentity().getMSPID();
         Account account = new Account(mspid, Status.AUTHORIZED, ATO.createFromContext(ctx, ato, artifacts), 0);
         ctx.getStub().putState(accountKey(mspid), SerializationUtils.serialize(account));
-
-        // put vote configuration on ledger
-        new VoteContract().UpdateVoteConfiguration(ctx, voteConfiguration);
     }
 }

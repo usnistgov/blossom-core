@@ -32,7 +32,8 @@ class VoteContractTest {
 
     @Test
     void testGetVoteConfiguration() throws Exception {
-        MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
+        MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
+        voteContract.UpdateVoteConfiguration(ctx, new VoteConfiguration(true, true, true, false));
         VoteConfiguration voteConfiguration = voteContract.GetVoteConfiguration(ctx);
         assertEquals(
                 new VoteConfiguration(true, true, true, false),

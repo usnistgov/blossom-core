@@ -61,6 +61,9 @@ public class Vote implements Serializable {
     @Property
     private Result result;
 
+    public Vote() {
+    }
+
     public Vote(@JsonProperty String id, @JsonProperty String initiatingMSPID, @JsonProperty String targetMember,
                 @JsonProperty Status statusChange, @JsonProperty String reason, @JsonProperty Threshold threshold,
                 @JsonProperty int count, @JsonProperty Result result) {

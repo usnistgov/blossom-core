@@ -1,7 +1,6 @@
 package contract;
 
 import gov.nist.csd.pm.policy.exceptions.PMException;
-import model.ATO;
 import model.Account;
 import model.MOU;
 import model.Status;
@@ -16,7 +15,6 @@ import org.hyperledger.fabric.shim.ChaincodeException;
 import org.hyperledger.fabric.shim.ledger.KeyModification;
 import org.hyperledger.fabric.shim.ledger.QueryResultsIterator;
 
-import java.io.Serial;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -56,11 +54,15 @@ public class MOUContract implements ContractInterface {
      *
      * @param ctx Fabric context object.
      * @param text The contents of the MOU.
-     * @throws PMException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
+     * @throws ChaincodeException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
      */
     @Transaction
-    public void UpdateMOU(Context ctx, String text) throws PMException {
-        pdp.updateMOU(ctx);
+    public void UpdateMOU(Context ctx, String text) {
+        try {
+            pdp.updateMOU(ctx);
+        } catch (PMException e) {
+            throw new ChaincodeException(e);
+        }
 
         String timestamp = ctx.getStub().getTxTimestamp().toString();
 
@@ -86,6 +88,7 @@ public class MOUContract implements ContractInterface {
      *
      * @param ctx Fabric context object.
      * @return an MOU object.
+     * @throws ChaincodeException is the MOU has not been created yet.
      */
     @Transaction
     public MOU GetMOU(Context ctx) {
@@ -126,11 +129,16 @@ public class MOUContract implements ContractInterface {
      *
      * @param ctx Fabric context object.
      * @param version The version of the MOU the cid is signing.
-     * @throws PMException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
+     * @throws ChaincodeException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
+     * @throws ChaincodeException If the version being signed is not the same as the latest version.
      */
     @Transaction
-    public void SignMOU(Context ctx, int version) throws PMException {
-        pdp.signMOU(ctx);
+    public void SignMOU(Context ctx, int version) {
+        try {
+            pdp.signMOU(ctx);
+        } catch (PMException e) {
+            throw new ChaincodeException(e);
+        }
 
         MOU mou = GetMOU(ctx);
 
@@ -167,10 +175,12 @@ public class MOUContract implements ContractInterface {
      *  - payload: a serialized Account object
      *
      * @param ctx Fabric context object.
-     * @throws PMException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
+     * @throws ChaincodeException If the cid MSPID has not signed the MOU first.
+     * @throws ChaincodeException If the cid MSPID has already joined.
+     * @throws ChaincodeException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
      */
     @Transaction
-    public void Join(Context ctx) throws PMException {
+    public void Join(Context ctx) {
         String mspid = ctx.getClientIdentity().getMSPID();
 
         Account account;
@@ -184,7 +194,11 @@ public class MOUContract implements ContractInterface {
             throw new ChaincodeException(mspid + " is already joined");
         }
 
-        pdp.join(ctx, mspid);
+        try {
+            pdp.join(ctx, mspid);
+        } catch (PMException e) {
+            throw new ChaincodeException(e);
+        }
 
         // update the account status to PENDING, which is the initial status after approval
         account.setStatus(Status.PENDING);

@@ -68,13 +68,17 @@ public class VoteContract implements ContractInterface {
      *  - name: "UpdateVoteConfiguration"
      *  - payload: a serialized VoteConfiguration object
      *
-     * @param ctx
-     * @param voteConfiguration
-     * @throws PMException
+     * @param ctx The Fabric context object.
+     * @param voteConfiguration The new vote configuration.
+     * @throws ChaincodeException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
      */
     @Transaction
-    public void UpdateVoteConfiguration(Context ctx, VoteConfiguration voteConfiguration) throws PMException {
-        pdp.updateVoteConfig(ctx, voteConfiguration);
+    public void UpdateVoteConfiguration(Context ctx, VoteConfiguration voteConfiguration) {
+        try {
+            pdp.updateVoteConfig(ctx, voteConfiguration);
+        } catch (PMException e) {
+            throw new ChaincodeException(e);
+        }
 
         byte[] bytes = SerializationUtils.serialize(voteConfiguration);
         ctx.getStub().putState(VOTE_CONFIG_KEY, bytes);
@@ -100,15 +104,20 @@ public class VoteContract implements ContractInterface {
      * @param targetMSPID The MSPID of the target of the vote.
      * @param statusChange A string representation of the intended status change if the vote is successful.
      * @param reason The reason for initiating the vote. Can be null or empty.
-     * @throws PMException If the requesting CID does not have permission to initiate a vote on the target member.
+     * @throws ChaincodeException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
      * @throws ChaincodeException If the target member does not exist.
      * @throws ChaincodeException If there is already an ongoing vote for the target member.
      */
     @Transaction
     public void InitiateVote(Context ctx, String targetMSPID,
-                             String statusChange, String reason) throws PMException {
+                             String statusChange, String reason) {
         String initiatorMSPID = ctx.getClientIdentity().getMSPID();
-        String adminmsp = getAdminMSPID(ctx);
+        String adminmsp;
+        try {
+            adminmsp = getAdminMSPID(ctx);
+        } catch (PMException e) {
+            throw new ChaincodeException(e);
+        }
 
         // check that the target member exists
         checkTargetMemberExists(ctx, targetMSPID);
@@ -132,7 +141,11 @@ public class VoteContract implements ContractInterface {
         String id = ctx.getStub().getTxId();
 
         // notify ngac of vote initiation, also checks the user has permission
-        pdp.initiateVote(ctx, id, targetMSPID);
+        try {
+            pdp.initiateVote(ctx, id, targetMSPID);
+        } catch (PMException e) {
+            throw new ChaincodeException(e);
+        }
 
         Vote vote = new Vote(id, initiatorMSPID, targetMSPID, status,
                 reason, threshold, 0, Vote.Result.ONGOING);
@@ -163,10 +176,10 @@ public class VoteContract implements ContractInterface {
      * @throws VoteDoesNotExistException If the vote does not exist.
      * @throws VoteHasAlreadyBeenCompletedException If the vote does not exist.
      * @throws ChaincodeException If the vote does not have enough votes for a decision.
-     * @throws PMException If the requesting CID cannot complete the vote.
+     * @throws ChaincodeException If the requesting CID cannot certify the vote.
      */
     @Transaction
-    public boolean CertifyVote(Context ctx, String id, String targetMember) throws PMException {
+    public boolean CertifyVote(Context ctx, String id, String targetMember) {
         if (!voteExists(ctx, id, targetMember)) {
             throw new VoteDoesNotExistException(id, targetMember);
         } else if (voteCompleted(ctx, id, targetMember)) {
@@ -174,7 +187,11 @@ public class VoteContract implements ContractInterface {
         }
 
         // check cid can certify vote
-        pdp.certifyVote(ctx, id, targetMember);
+        try {
+            pdp.certifyVote(ctx, id, targetMember);
+        } catch (PMException e) {
+            throw new ChaincodeException(e);
+        }
 
         // retrieve the vote
         Vote vote = GetVote(ctx, id, targetMember);
@@ -252,10 +269,10 @@ public class VoteContract implements ContractInterface {
      * @param targetMember The target of the vote.
      * @throws VoteDoesNotExistException If the vote does not exist.
      * @throws VoteHasAlreadyBeenCompletedException If the vote has already been completed.
-     * @throws PMException If the requesting CID cannot delete the vote.
+     * @throws ChaincodeException If the requesting CID cannot delete the vote.
      */
     @Transaction
-    public void AbortVote(Context ctx, String id, String targetMember) throws PMException {
+    public void AbortVote(Context ctx, String id, String targetMember) {
         if (!voteExists(ctx, id, targetMember)) {
             throw new VoteDoesNotExistException(id, targetMember);
         } else if (voteCompleted(ctx, id, targetMember)) {
@@ -266,7 +283,11 @@ public class VoteContract implements ContractInterface {
         vote.setResult(Vote.Result.ABORTED);
 
         // check the requesting cid can delete the given vote
-        pdp.abortVote(ctx, id, targetMember);
+        try {
+            pdp.abortVote(ctx, id, targetMember);
+        } catch (PMException e) {
+            throw new ChaincodeException(e);
+        }
 
         // delete vote
         ctx.getStub().delState(voteKey(id, targetMember));
@@ -291,10 +312,10 @@ public class VoteContract implements ContractInterface {
      * @param value The requesting CID's vote. True is "yes" and false is "no".
      * @throws VoteDoesNotExistException If the vote does not exist.
      * @throws VoteHasAlreadyBeenCompletedException If the vote has already been completed.
-     * @throws PMException If the requesting CID cannot vote.
+     * @throws ChaincodeException If the requesting CID cannot vote.
      */
     @Transaction
-    public void Vote(Context ctx, String id, String targetMember, boolean value) throws PMException {
+    public void Vote(Context ctx, String id, String targetMember, boolean value) {
         // get the mspid from the requesting cid and corresponding implicit PDC
         String mspid = ctx.getClientIdentity().getMSPID();
         String collection = getAccountImplicitDataCollection(mspid);
@@ -315,7 +336,11 @@ public class VoteContract implements ContractInterface {
         }
 
         // check if the cid can vote
-        pdp.vote(ctx, id, targetMember);
+        try {
+            pdp.vote(ctx, id, targetMember);
+        } catch (PMException e) {
+            throw new ChaincodeException(e);
+        }
 
         // check if this members has already voted
         // this doesn't prevent them from changing their vote, as long as the vote is still ongoing

@@ -30,7 +30,7 @@ class BootstrapContractTest {
 
         BootstrapContract blossomContract = new BootstrapContract();
         mockContext.setTimestamp(Instant.now());
-        blossomContract.Bootstrap(mockContext, TEST_VOTE_CONFIG, "org1 test ato", "artifacts");
+        blossomContract.Bootstrap(mockContext,"org1 test ato", "artifacts");
 
         assertNotNull(mockContext.getStub().getState("policy"));
         assertNotNull(mockContext.getStub().getState(accountKey(ORG1_MSP)));
@@ -47,8 +47,8 @@ class BootstrapContractTest {
         Instant now = Instant.now();
         mockContext.setTimestamp(now);
         mockContext.setTxId("123");
-        blossomContract.Bootstrap(mockContext, TEST_VOTE_CONFIG, "org1 test ato", "artifacts");
-        assertThrows(ChaincodeException.class, () -> blossomContract.Bootstrap(mockContext, TEST_VOTE_CONFIG, "org1 test ato2", "artifacts"));
+        blossomContract.Bootstrap(mockContext, "org1 test ato", "artifacts");
+        assertThrows(ChaincodeException.class, () -> blossomContract.Bootstrap(mockContext, "org1 test ato2", "artifacts"));
 
         assertEquals(new ATO(
                 "123", now.toString(), now.toString(), 1, "org1 test ato", "artifacts", List.of()

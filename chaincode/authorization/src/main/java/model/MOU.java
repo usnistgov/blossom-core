@@ -19,6 +19,9 @@ public class MOU implements Serializable {
     @Property
     private String timestamp;
 
+    public MOU() {
+    }
+
     public MOU(@JsonProperty String text, @JsonProperty int version, @JsonProperty String timestamp) {
         this.text = text;
         this.version = version;

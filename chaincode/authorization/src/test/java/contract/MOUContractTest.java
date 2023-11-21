@@ -90,7 +90,7 @@ class MOUContractTest {
             MockContext mockContext = new MockContext(MockIdentity.ORG1_AO);
             BootstrapContract bootstrapContract = new BootstrapContract();
             mockContext.setTimestamp(Instant.now());
-            bootstrapContract.Bootstrap(mockContext, TEST_VOTE_CONFIG, "org1 test ato", "org1 artifacts");
+            bootstrapContract.Bootstrap(mockContext, "org1 test ato", "org1 artifacts");
 
             ChaincodeException e = assertThrows(ChaincodeException.class,
                                                 () -> contract.GetMOU(mockContext));
@@ -167,7 +167,7 @@ class MOUContractTest {
 
             BootstrapContract bootstrapContract = new BootstrapContract();
             mockContext.setTimestamp(Instant.now());
-            bootstrapContract.Bootstrap(mockContext, TEST_VOTE_CONFIG, "org1 test ato", "org1 artifacts");
+            bootstrapContract.Bootstrap(mockContext, "org1 test ato", "org1 artifacts");
 
             ChaincodeException e = assertThrows(ChaincodeException.class, () -> contract.SignMOU(mockContext, 0));
             assertEquals("Blossom MOU has not yet been created", e.getMessage());

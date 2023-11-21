@@ -31,6 +31,9 @@ public class AccountHistorySnapshot implements Serializable {
     @Property
     private Account account;
 
+    public AccountHistorySnapshot() {
+    }
+
     public AccountHistorySnapshot(@JsonProperty String txID, @JsonProperty String timestamp, @JsonProperty Account account) {
         this.txID = txID;
         this.timestamp = timestamp;

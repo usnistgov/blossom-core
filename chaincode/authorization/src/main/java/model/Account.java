@@ -37,6 +37,9 @@ public class Account implements Serializable {
     @Property
     private int mouVersion;
 
+    public Account() {
+    }
+
     public Account(@JsonProperty String id, @JsonProperty Status status,
                    @JsonProperty ATO ato, @JsonProperty int mouVersion) {
         this.id = id;

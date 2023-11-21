@@ -35,7 +35,7 @@ public class MockContextUtil {
 
         BootstrapContract bootstrapContract = new BootstrapContract();
         mockContext.setTimestamp(Instant.now());
-        bootstrapContract.Bootstrap(mockContext, TEST_VOTE_CONFIG, "org1 test ato", "org1 artifacts");
+        bootstrapContract.Bootstrap(mockContext, "org1 test ato", "org1 artifacts");
 
         // clear stub's transient
         mockContext.getStub().setTransientData(new HashMap<>());
@@ -85,7 +85,7 @@ public class MockContextUtil {
         mockCtx.setTxId("123");
 
         BootstrapContract bootstrapContract = new BootstrapContract();
-        bootstrapContract.Bootstrap(mockCtx, TEST_VOTE_CONFIG, "org1 test ato", "org1 artifacts");
+        bootstrapContract.Bootstrap(mockCtx, "org1 test ato", "org1 artifacts");
 
         // clear stub's transient
         mockCtx.getStub().setTransientData(new HashMap<>());

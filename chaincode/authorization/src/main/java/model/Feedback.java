@@ -19,6 +19,9 @@ public class Feedback implements Serializable {
     @Property
     private String comments;
 
+    public Feedback() {
+    }
+
     public Feedback(@JsonProperty int atoVersion, @JsonProperty String org, @JsonProperty String comments) {
         this.atoVersion = atoVersion;
         this.org = org;

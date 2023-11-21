@@ -21,6 +21,7 @@ import org.bouncycastle.asn1.x500.style.BCStyle;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateHolder;
 import org.hyperledger.fabric.contract.ClientIdentity;
 import org.hyperledger.fabric.contract.Context;
+import org.hyperledger.fabric.shim.ChaincodeException;
 
 import java.nio.charset.StandardCharsets;
 import java.security.cert.CertificateEncodingException;
@@ -361,17 +362,21 @@ public class BlossomPDP {
         String accountUA = accountUsersNodeName(mspid);
 
         if (!policy.graph().nodeExists(role)) {
-            throw new PMException("unknown user role: " + role);
+            throw new ChaincodeException("unknown user role: " + role);
         } else if (!policy.graph().nodeExists(accountUA)) {
-            throw new PMException("account " + mspid + " has not yet joined");
+            throw new ChaincodeException("account " + mspid + " has not yet joined");
         }
 
         // create the calling user in the graph and assign to appropriate attributes
-        policy.graph().createUser(ngacUserName, accountUA, role);
+        try {
+            policy.graph().createUser(ngacUserName, accountUA, role);
 
-        // check if user is blossom admin
-        if (getAdminMSPID(policy).equals(mspid) && role.equals(AUTHORIZING_OFFICIAL)) {
-            policy.graph().assign(ngacUserName, "Blossom Admin");
+            // check if user is blossom admin
+            if (getAdminMSPID(policy).equals(mspid) && role.equals(AUTHORIZING_OFFICIAL)) {
+                policy.graph().assign(ngacUserName, "Blossom Admin");
+            }
+        } catch (PMException e) {
+            throw new ChaincodeException(e.getMessage());
         }
 
         // create a new PolicyReviewer object to make a decision

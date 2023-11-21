@@ -22,6 +22,9 @@ public class VoteConfiguration implements Serializable {
     @Property
     private boolean certifyOrAbortVoteWhenNotAuthorized;
 
+    public VoteConfiguration() {
+    }
+
     public VoteConfiguration(@JsonProperty boolean voteOnSelf, @JsonProperty boolean voteWhenNotAuthorized,
                              @JsonProperty boolean initiateVoteOnSelfWhenNotAuthorized, @JsonProperty boolean certifyOrAbortVoteWhenNotAuthorized) {
         this.voteOnSelf = voteOnSelf;

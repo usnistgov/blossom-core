@@ -13,8 +13,6 @@ import org.hyperledger.fabric.contract.annotation.Info;
 import org.hyperledger.fabric.contract.annotation.Transaction;
 import org.hyperledger.fabric.shim.ChaincodeException;
 
-import java.io.Serial;
-
 import static contract.AccountContract.accountKey;
 
 @Contract(
@@ -40,13 +38,17 @@ public class ATOContract implements ContractInterface {
      * @param ctx Fabric context object.
      * @param memo The ATO memo value.
      * @param artifacts The ATO artifacts value.
-     * @throws PMException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
+     * @throws ChaincodeException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
      */
-    public void CreateATO(Context ctx, String memo, String artifacts) throws PMException {
+    public void CreateATO(Context ctx, String memo, String artifacts) {
         String mspid = ctx.getClientIdentity().getMSPID();
 
         // check the requesting cid can write an ATO
-        pdp.writeATO(ctx, mspid);
+        try {
+            pdp.writeATO(ctx, mspid);
+        } catch (PMException e) {
+            throw new ChaincodeException(e);
+        }
 
         // deserialize the account object from the state and update the ATO value
         Account account = new AccountContract().GetAccount(ctx, mspid);
@@ -72,13 +74,18 @@ public class ATOContract implements ContractInterface {
      * @param ctx Fabric context object.
      * @param memo The ATO memo value.
      * @param artifacts The ATO artifacts value.
-     * @throws PMException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
+     * @throws ChaincodeException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
+     * @throws ChaincodeException If the account's ATO has not been created yet.
      */
-    public void UpdateATO(Context ctx, String memo, String artifacts) throws PMException {
+    public void UpdateATO(Context ctx, String memo, String artifacts) {
         String mspid = ctx.getClientIdentity().getMSPID();
 
         // check the requesting cid can write an ATO
-        pdp.writeATO(ctx, mspid);
+        try {
+            pdp.writeATO(ctx, mspid);
+        } catch (PMException e) {
+            throw new ChaincodeException(e);
+        }
 
         // deserialize the account object from the state and update the ATO value
         Account account = new AccountContract().GetAccount(ctx, mspid);
@@ -110,10 +117,12 @@ public class ATOContract implements ContractInterface {
      * @param targetOrg The org to provide feedback to.
      * @param atoVersion The ATO version the feedback is addressing.
      * @param comments The comments provided.
-     * @throws PMException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
+     * @throws ChaincodeException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
+     * @throws ChaincodeException If the target account has not created an ATO yet.
+     * @throws ChaincodeException If the feedback is targeting the wrong ATO version.
      */
     @Transaction
-    public void SubmitFeedback(Context ctx, String targetOrg, int atoVersion, String comments) throws PMException {
+    public void SubmitFeedback(Context ctx, String targetOrg, int atoVersion, String comments) {
         String mspid = ctx.getClientIdentity().getMSPID();
 
         // get the target account to retrieve the current ATO
@@ -130,7 +139,11 @@ public class ATOContract implements ContractInterface {
         }
 
         // check that cid can submit feedback
-        pdp.submitFeedback(ctx, targetOrg);
+        try {
+            pdp.submitFeedback(ctx, targetOrg);
+        } catch (PMException e) {
+            throw new ChaincodeException(e);
+        }
 
         Feedback feedback = new Feedback(atoVersion, mspid, comments);
         account.addATOFeedback(feedback);
