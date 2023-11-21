@@ -26,15 +26,23 @@ public class Account implements Serializable {
     private Status status;
 
     /**
-     * Account ATO attestation
+     * Account ATO
      */
     @Property
-    private String ato;
+    private ATO ato;
 
-    public Account(@JsonProperty String id, @JsonProperty Status status, @JsonProperty String ato) {
+    /**
+     * The most recent version of the MOU that the account has signed.
+     */
+    @Property
+    private int mouVersion;
+
+    public Account(@JsonProperty String id, @JsonProperty Status status,
+                   @JsonProperty ATO ato, @JsonProperty int mouVersion) {
         this.id = id;
         this.status = status;
         this.ato = ato;
+        this.mouVersion = mouVersion;
     }
 
     public String getId() {
@@ -53,25 +61,55 @@ public class Account implements Serializable {
         this.status = status;
     }
 
-    public String getAto() {
+    public ATO getAto() {
         return ato;
     }
 
-    public void setAto(String ato) {
+    public void setAto(ATO ato) {
         this.ato = ato;
+    }
+
+    public int getMouVersion() {
+        return mouVersion;
+    }
+
+    public void setMouVersion(int mouVersion) {
+        this.mouVersion = mouVersion;
+    }
+
+    public void updateATO(int version, String lastUpdatedTimestamp, String memo, String artifacts) {
+        ato.setVersion(version);
+        ato.setLastUpdatedTimestamp(lastUpdatedTimestamp);
+
+        if (memo != null && !memo.isEmpty()) {
+            ato.setMemo(memo);
+        }
+
+        if (artifacts != null && !artifacts.isEmpty()) {
+            ato.setArtifacts(artifacts);
+        }
+    }
+
+    public void addATOFeedback(Feedback feedback) {
+        this.ato.addFeedback(feedback);
     }
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
         Account account = (Account) o;
-        return Objects.equals(id, account.id) && status == account.status && Objects.equals(ato, account.ato);
+        return mouVersion == account.mouVersion && Objects.equals(
+                id, account.id) && status == account.status && Objects.equals(ato, account.ato);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, status, ato);
+        return Objects.hash(id, status, ato, mouVersion);
     }
 
     @Override
@@ -80,6 +118,7 @@ public class Account implements Serializable {
                 "id='" + id + '\'' +
                 ", status=" + status +
                 ", ato='" + ato + '\'' +
+                ", mouVersion=" + mouVersion +
                 '}';
     }
 }

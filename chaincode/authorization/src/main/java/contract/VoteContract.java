@@ -4,6 +4,7 @@ import gov.nist.csd.pm.policy.exceptions.PMException;
 import model.Account;
 import model.Status;
 import model.Vote;
+import model.VoteConfiguration;
 import ngac.BlossomPDP;
 import org.apache.commons.lang3.SerializationUtils;
 import org.hyperledger.fabric.contract.Context;
@@ -35,23 +36,30 @@ import static ngac.BlossomPDP.getAdminMSPID;
 )
 public class VoteContract implements ContractInterface {
 
-    /**
-     * Prefix used for building vote keys.
-     */
-    private static final String VOTE_PREFIX = "vote:";
+    public static final String VOTE_PREFIX = "vote:";
+    public static final String VOTE_CONFIG_KEY = "voteConfig";
 
     private BlossomPDP pdp = new BlossomPDP();
 
     @Transaction
-    public Vote TestGet(Context ctx) {
-        return new Vote("123", "321", "123", Status.UNAUTHORIZED_ATO, "reason",
-                Vote.Threshold.MAJORITY, 4, Vote.Result.ONGOING);
+    public VoteConfiguration GetVoteConfiguration(Context ctx) {
+        return SerializationUtils.deserialize(ctx.getStub().getState(VOTE_CONFIG_KEY));
+    }
+
+    @Transaction
+    public void UpdateVoteConfiguration(Context ctx, VoteConfiguration voteConfiguration) throws PMException {
+        pdp.updateVoteConfig(ctx, voteConfiguration);
+
+        byte[] bytes = SerializationUtils.serialize(voteConfiguration);
+        ctx.getStub().putState(VOTE_CONFIG_KEY, bytes);
+
+        ctx.getStub().setEvent("UpdateVoteConfiguration", bytes);
     }
 
     /**
      * Initiate a vote to change the status of a Blossom member.
      *
-     * NGAC: Only users with the "System Owner" attribute can initiate a vote. Any member can initiate a vote on another
+     * NGAC: Only users with the "Authorizing Official" attribute can initiate a vote. Any member can initiate a vote on another
      * member, including the Blossom Admin member, as long as they have an "AUTHORIZED" status. Members with pending or
      * unauthorized statuses will only be able to initiate a vote on themselves. Votes on the Blossom Admin require a
      * super majority (> 2/3) to pass, while all other members require a simple majority (> 1/2) to pass.
@@ -100,7 +108,10 @@ public class VoteContract implements ContractInterface {
         Vote vote = new Vote(id, initiatorMSPID, targetMSPID, status,
                 reason, threshold, 0, Vote.Result.ONGOING);
 
-        ctx.getStub().putState(voteKey(id, targetMSPID), SerializationUtils.serialize(vote));
+        byte[] bytes = SerializationUtils.serialize(vote);
+        ctx.getStub().putState(voteKey(id, targetMSPID), bytes);
+
+        ctx.getStub().setEvent("InitiateVote", bytes);
     }
 
     /**
@@ -123,23 +134,30 @@ public class VoteContract implements ContractInterface {
      * @throws PMException If the requesting CID cannot complete the vote.
      */
     @Transaction
-    public boolean CompleteVote(Context ctx, String id, String targetMember) throws PMException {
+    public boolean CertifyVote(Context ctx, String id, String targetMember) throws PMException {
         if (!voteExists(ctx, id, targetMember)) {
             throw new VoteDoesNotExistException(id, targetMember);
         } else if (voteCompleted(ctx, id, targetMember)) {
             throw new VoteHasAlreadyBeenCompletedException(id, targetMember);
         }
 
-        // check the requesting cid can complete this vote
-        pdp.completeVote(ctx, id, targetMember);
+        // check cid can certify vote
+        pdp.certifyVote(ctx, id, targetMember);
 
         // retrieve the vote
         Vote vote = GetVote(ctx, id, targetMember);
 
         // tally votes
-        AccountContract accountContract = new AccountContract();
-        List<Account> members = accountContract.GetAccounts(ctx);
+        AccountContract AccountContract = new AccountContract();
+        List<Account> members = AccountContract.GetAccounts(ctx);
+
+        // get the possible total votes, if self voting is not allowed then the total is one minus the total numbers of members
+        boolean selfVoteAllowed = GetVoteConfiguration(ctx).isVoteOnSelf();
         int total = members.size();
+        if (!selfVoteAllowed) {
+            total--;
+        }
+
         int yes = 0;
         int no = 0;
 
@@ -149,6 +167,13 @@ public class VoteContract implements ContractInterface {
         // If execution has reached here then the requesting cid has permission to complete the vote
         // implying permission to see the vote in each members implicit PDC
         for (Account account : members) {
+            // check if self voting is not allowed and skip the target of the vote if true
+            // even if they were allowed to vote at the time they voted, the configuration could change
+            // before certification
+            if (!selfVoteAllowed && account.getId().equals(vote.getTargetMember())) {
+                continue;
+            }
+
             String collection = getAccountImplicitDataCollection(account.getId());
             byte[] bytes = ctx.getStub().getPrivateData(collection, voteKey(id, targetMember));
             if (bytes == null) {
@@ -167,11 +192,15 @@ public class VoteContract implements ContractInterface {
         if (Vote.passed(yes, total, vote.getThreshold())) {
             passed = true;
             handlePassedVote(ctx, id, targetMember, vote.getStatusChange(), vote);
+            vote.setResult(Vote.Result.PASSED);
         } else if (Vote.failed(yes, no, total, vote.getThreshold())) {
             handleFailedVote(ctx, id, targetMember, vote);
+            vote.setResult(Vote.Result.FAILED);
         } else {
             throw new ChaincodeException("not enough votes for a result");
         }
+
+        ctx.getStub().setEvent("CertifyVote", SerializationUtils.serialize(vote));
 
         return passed;
     }
@@ -191,25 +220,30 @@ public class VoteContract implements ContractInterface {
      * @throws PMException If the requesting CID cannot delete the vote.
      */
     @Transaction
-    public void DeleteVote(Context ctx, String id, String targetMember) throws PMException {
+    public void AbortVote(Context ctx, String id, String targetMember) throws PMException {
         if (!voteExists(ctx, id, targetMember)) {
             throw new VoteDoesNotExistException(id, targetMember);
         } else if (voteCompleted(ctx, id, targetMember)) {
             throw new VoteHasAlreadyBeenCompletedException(id, targetMember);
         }
 
+        Vote vote = GetVote(ctx, id, targetMember);
+        vote.setResult(Vote.Result.ABORTED);
+
         // check the requesting cid can delete the given vote
-        pdp.deleteVote(ctx, id, targetMember);
+        pdp.abortVote(ctx, id, targetMember);
 
         // delete vote
         ctx.getStub().delState(voteKey(id, targetMember));
+
+        ctx.getStub().setEvent("AbortVote", SerializationUtils.serialize(vote));
     }
 
     /**
      * Vote as the requesting CID's MSPID for a vote with the given ID and target member. Members can overwrite their
      * votes as long as the vote has not been completed yet. Votes are stored in each member's implicit data collection.
      *
-     * NGAC: Only users with the "System Owner" attribute can vote. All members can vote. Even members with pending or
+     * NGAC: Only users with the "Authorizing Official" attribute can vote. All members can vote. Even members with pending or
      * unauthorized statuses.
      *
      * @param ctx Chaincode context which stores the requesting CID and exposes world state functions.
@@ -222,6 +256,10 @@ public class VoteContract implements ContractInterface {
      */
     @Transaction
     public void Vote(Context ctx, String id, String targetMember, boolean value) throws PMException {
+        // get the mspid from the requesting cid and corresponding implicit PDC
+        String mspid = ctx.getClientIdentity().getMSPID();
+        String collection = getAccountImplicitDataCollection(mspid);
+
         //check vote exists and is not completed
         if (!voteExists(ctx, id, targetMember)) {
             throw new VoteDoesNotExistException(id, targetMember);
@@ -229,11 +267,16 @@ public class VoteContract implements ContractInterface {
             throw new VoteHasAlreadyBeenCompletedException(id, targetMember);
         }
 
-        pdp.vote(ctx, id, targetMember);
+        // check if org can vote on itself
+        if (mspid.equals(targetMember)) {
+            VoteConfiguration voteConfiguration = GetVoteConfiguration(ctx);
+            if (!voteConfiguration.isVoteOnSelf()) {
+                throw new ChaincodeException("members cannot vote on themselves");
+            }
+        }
 
-        // get the mspid from the requesting cid and corresponding implicit PDC
-        String mspid = ctx.getClientIdentity().getMSPID();
-        String collection = getAccountImplicitDataCollection(mspid);
+        // check if the cid can vote
+        pdp.vote(ctx, id, targetMember);
 
         // check if this members has already voted
         // this doesn't prevent them from changing their vote, as long as the vote is still ongoing
@@ -255,7 +298,10 @@ public class VoteContract implements ContractInterface {
         }
 
         // update vote
-        ctx.getStub().putState(voteKey(id, targetMember), SerializationUtils.serialize(vote));
+        bytes = SerializationUtils.serialize(vote);
+        ctx.getStub().putState(voteKey(id, targetMember), bytes);
+
+        ctx.getStub().setEvent("Vote", bytes);
     }
 
     /**
@@ -414,10 +460,10 @@ public class VoteContract implements ContractInterface {
     }
 
     private void handlePassedVote(Context ctx, String id, String targetMember, Status status, Vote vote) {
-        AccountContract accountContract = new AccountContract();
+        AccountContract AccountContract = new AccountContract();
 
         // update the account
-        Account account = accountContract.GetAccount(ctx, targetMember);
+        Account account = AccountContract.GetAccount(ctx, targetMember);
         account.setStatus(status);
 
         ctx.getStub().putState(accountKey(targetMember), SerializationUtils.serialize(account));

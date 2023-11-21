@@ -5,6 +5,7 @@ import org.hyperledger.fabric.shim.ChaincodeException;
 import java.io.Serializable;
 
 public enum Status implements Serializable {
+
     AUTHORIZED,
     PENDING,
     UNAUTHORIZED;
@@ -21,5 +22,4 @@ public enum Status implements Serializable {
                 throw new ChaincodeException("unknown Status: " + statusStr);
         }
     }
-
 }

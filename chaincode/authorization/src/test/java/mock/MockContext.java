@@ -2,7 +2,6 @@ package mock;
 
 import org.hyperledger.fabric.contract.ClientIdentity;
 import org.hyperledger.fabric.contract.Context;
-import org.hyperledger.fabric.shim.ChaincodeStub;
 
 import java.io.IOException;
 import java.security.cert.CertificateException;
@@ -27,6 +26,11 @@ public class MockContext extends Context {
     }
 
     public void setTimestamp(Instant ts) {
+        ((MockChaincodeStub) stub).setTimestamp(ts);
+    }
+
+    public void setTxId(String txId) {
+        ((MockChaincodeStub) stub).setTxId(txId);
     }
 
     @Override

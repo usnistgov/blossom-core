@@ -5,12 +5,13 @@ import org.hyperledger.fabric.contract.annotation.DataType;
 import org.hyperledger.fabric.contract.annotation.Property;
 
 import java.io.Serializable;
+import java.util.Objects;
 
 /**
  * Snapshot of Blossom account.
  */
 @DataType
-public class HistorySnapshot implements Serializable {
+public class AccountHistorySnapshot implements Serializable {
 
     /**
      * Fabric transaction ID.
@@ -30,7 +31,7 @@ public class HistorySnapshot implements Serializable {
     @Property
     private Account account;
 
-    public HistorySnapshot(@JsonProperty String txID, @JsonProperty String timestamp, @JsonProperty Account account) {
+    public AccountHistorySnapshot(@JsonProperty String txID, @JsonProperty String timestamp, @JsonProperty Account account) {
         this.txID = txID;
         this.timestamp = timestamp;
         this.account = account;
@@ -60,4 +61,30 @@ public class HistorySnapshot implements Serializable {
         this.account = account;
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        AccountHistorySnapshot that = (AccountHistorySnapshot) o;
+        return Objects.equals(txID, that.txID) && Objects.equals(
+                timestamp, that.timestamp) && Objects.equals(account, that.account);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(txID, timestamp, account);
+    }
+
+    @Override
+    public String toString() {
+        return "AccountHistorySnapshot{" +
+                "txID='" + txID + '\'' +
+                ", timestamp='" + timestamp + '\'' +
+                ", account=" + account +
+                '}';
+    }
 }

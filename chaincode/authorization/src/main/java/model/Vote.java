@@ -164,6 +164,20 @@ public class Vote implements Serializable {
         return Objects.hash(id, initiatingMSPID, targetMember, statusChange, reason, threshold, count, result);
     }
 
+    @Override
+    public String toString() {
+        return "Vote{" +
+                "id='" + id + '\'' +
+                ", initiatingMSPID='" + initiatingMSPID + '\'' +
+                ", targetMember='" + targetMember + '\'' +
+                ", statusChange=" + statusChange +
+                ", reason='" + reason + '\'' +
+                ", threshold=" + threshold +
+                ", count=" + count +
+                ", result=" + result +
+                '}';
+    }
+
     /**
      * Threshold for a vote
      */
@@ -200,6 +214,10 @@ public class Vote implements Serializable {
         /**
          * The vote failed
          */
-        FAILED
+        FAILED,
+        /**
+         * The vote was aborted before certification
+         */
+        ABORTED
     }
 }

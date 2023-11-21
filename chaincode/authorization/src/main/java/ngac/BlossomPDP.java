@@ -2,13 +2,18 @@ package ngac;
 
 import gov.nist.csd.pm.pap.PAP;
 import gov.nist.csd.pm.pap.memory.MemoryPolicyStore;
-import gov.nist.csd.pm.pdp.PolicyReviewer;
-import gov.nist.csd.pm.pdp.memory.MemoryPolicyReviewer;
+import gov.nist.csd.pm.pdp.reviewer.PolicyReviewer;
 import gov.nist.csd.pm.policy.Policy;
 import gov.nist.csd.pm.policy.exceptions.PMException;
+import gov.nist.csd.pm.policy.exceptions.UnauthorizedException;
 import gov.nist.csd.pm.policy.model.access.AccessRightSet;
 import gov.nist.csd.pm.policy.model.access.UserContext;
-import gov.nist.csd.pm.policy.pml.model.expression.Value;
+import gov.nist.csd.pm.policy.pml.value.StringValue;
+import gov.nist.csd.pm.policy.pml.value.Value;
+import gov.nist.csd.pm.policy.serialization.json.JSONDeserializer;
+import gov.nist.csd.pm.policy.serialization.json.JSONSerializer;
+import gov.nist.csd.pm.policy.serialization.pml.PMLDeserializer;
+import model.VoteConfiguration;
 import org.bouncycastle.asn1.x500.AttributeTypeAndValue;
 import org.bouncycastle.asn1.x500.RDN;
 import org.bouncycastle.asn1.x500.X500Name;
@@ -17,7 +22,6 @@ import org.bouncycastle.cert.jcajce.JcaX509CertificateHolder;
 import org.hyperledger.fabric.contract.ClientIdentity;
 import org.hyperledger.fabric.contract.Context;
 
-import javax.security.auth.x500.X500Principal;
 import java.nio.charset.StandardCharsets;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.X509Certificate;
@@ -27,9 +31,9 @@ import java.security.cert.X509Certificate;
  */
 public class BlossomPDP {
 
-    private static final String BLOSSOM_SYSTEM = "blossom_system";
+    private static final String BLOSSOM_TARGET = "blossom_target";
     private static final String BLOSSOM_ROLE_ATTR = "blossom.role";
-    private static final String SYSTEM_OWNER_UA = "System Owner";
+    private static final String AUTHORIZING_OFFICIAL = "Authorizing Official";
 
     /**
      * Get the AdminMSP defined in the policy stored on the ledger.
@@ -39,7 +43,9 @@ public class BlossomPDP {
      * @throws PMException If there is an error retrieving the policy from the ledger.
      */
     public static String getAdminMSPID(Context ctx) throws PMException {
-        MemoryPolicyStore memoryPolicyStore = loadPolicy(ctx);
+        UserContext userCtx = getUserCtxFromRequest(ctx);
+
+        MemoryPolicyStore memoryPolicyStore = loadPolicy(ctx, userCtx);
         return getAdminMSPID(memoryPolicyStore);
     }
 
@@ -56,119 +62,94 @@ public class BlossomPDP {
     }
 
     /**
-     * Initialize the NGAC policy with the given PML string. The requesting user needs the "bootstrap" permission on
-     * the blossom system.
+     * Initialize the NGAC policy with the given PML string. The requesting user needs the "bootstrap" permission on the
+     * blossom system.
      *
-     * @param ctx Chaincode context.
-     * @param pml The PML string to initialize an NGAC policy with.
+     * @param ctx               Chaincode context.
+     * @param pml               The PML string to initialize an NGAC policy with.
+     *
      * @return A PAP object that stores an in memory policy from the given PML.
+     *
      * @throws PMException If the requesting user cannot perform the action.
      */
-    public PAP initNGAC(Context ctx, String pml) throws PMException {
+    public PAP bootstrap(Context ctx, String pml) throws PMException {
         UserContext userCtx = getUserCtxFromRequest(ctx);
 
         // create a new PAP object to compile and execute the PML
         PAP pap = new PAP(new MemoryPolicyStore());
         UserContext user = new UserContext(getNGACUserName(ctx));
-        pap.deserialize().fromPML(user, pml);
+        pap.deserialize(user, pml, new PMLDeserializer());
 
         PolicyReviewer reviewer = loadPolicyReviewer(ctx, pap);
-        AccessRightSet accessRights = reviewer.getAccessRights(userCtx, BLOSSOM_SYSTEM);
+        AccessRightSet accessRights = reviewer.access().computePrivileges(userCtx, BLOSSOM_TARGET);
 
         if (!accessRights.contains("bootstrap")) {
-            throw new PMException("user " + userCtx.getUser() + " cannot bootstrap");
+            throw new UnauthorizedException(userCtx, BLOSSOM_TARGET, "bootstrap");
         }
+
+        // delete user from policy before returning since the returned pap will be written to the world state
+        pap.graph().deleteNode(user.getUser());
 
         return pap;
     }
 
+    public void updateMOU(Context ctx) throws PMException {
+        decide(ctx, BLOSSOM_TARGET, "update_mou");
+    }
+
+    public void updateVoteConfig(Context ctx, VoteConfiguration voteConfiguration) throws PMException {
+        decideAndRespond(ctx, BLOSSOM_TARGET, "update_vote_config",
+                                "updateVoteConfig", Value.fromObject(voteConfiguration));
+    }
+
+    public void signMOU(Context ctx) throws PMException {
+        decideWithoutAccountAttribute(ctx, BLOSSOM_TARGET, "sign_mou");
+    }
+
+    public void join(Context ctx, String account) throws PMException {
+        decideWithoutAccountAttributeAndRespond(ctx, BLOSSOM_TARGET, "join", "join", new StringValue(account));
+    }
+
     /**
-     * Check if the given user has "request_account" on the blossom_system.
+     * Check if the requesting user has "write_ato" on the object representing the given account.
+     *
+     * @param ctx Chaincode context.
+     * @param account The account to upload the ATO for.
+     * @throws PMException If the requesting user cannot perform the action.
+     */
+    public void writeATO(Context ctx, String account) throws PMException {
+        String target = accountObjectNodeName(account);
+        decide(ctx, target, "write_ato");
+    }
+
+    /**
+     * Check if the requesting user has "submit_feedback" on the object representing the given account.
      *
      * @param ctx Chaincode context.
      * @throws PMException If the requesting user cannot perform the action.
      */
-    public void requestAccount(Context ctx) throws PMException {
-        UserContext userCtx = getUserCtxFromRequest(ctx);
-        MemoryPolicyStore memoryPolicyStore = loadPolicy(ctx);
-        PolicyReviewer reviewer = loadPolicyReviewerWithoutAccountUA(ctx, memoryPolicyStore);
-        AccessRightSet accessRights = reviewer.getAccessRights(userCtx, BLOSSOM_SYSTEM);
-
-        if (!accessRights.contains("request_account")) {
-            throw new PMException("user " + userCtx.getUser() + " cannot request account");
-        }
+    public void submitFeedback(Context ctx, String targetMember) throws PMException {
+        String target = accountObjectNodeName(targetMember);
+        decide(ctx, target, "submit_feedback");
     }
 
     /**
-     * Check if the requesting user has "approve_account" on blossom_system. If they do, call the approveAccount function
-     * defined in policy.pml to create account in the policy.
+     * Check if the requesting user has "initiate_vote" on the object representing the target member of the vote. If
+     * they do call the initiateVote function defined in policy.pml to create the vote object and give initiator
+     * permissions on the vote object.
      *
-     * @param ctx Chaincode context.
-     * @param account The ID of the account to approve.
-     * @throws PMException If the requesting user cannot perform the action.
-     */
-    public void approveAccount(Context ctx, String account) throws PMException {
-        UserContext userCtx = getUserCtxFromRequest(ctx);
-        MemoryPolicyStore memoryPolicyStore = loadPolicy(ctx);
-        PolicyReviewer reviewer = loadPolicyReviewer(ctx, memoryPolicyStore);
-        AccessRightSet accessRights = reviewer.getAccessRights(userCtx, BLOSSOM_SYSTEM);
-
-        boolean result = accessRights.contains("approve_account");
-        if (!result) {
-            throw new PMException("user " + userCtx.getUser() + " cannot approve account");
-        }
-
-        PAP pap = new PAP(memoryPolicyStore);
-        String pml = String.format("approveAccount('%s')", account);
-        pap.executePML(userCtx, pml);
-
-        ctx.getStub().putState("policy", memoryPolicyStore.serialize().toJSON().getBytes(StandardCharsets.UTF_8));
-    }
-
-    /**
-     * Check if the requesting user has "upload_ato" on the object representing the given account.
-     *
-     * @param ctx Chaincode context.
-     * @param account
-     * @throws PMException If the requesting user cannot perform the action.
-     */
-    public void uploadATO(Context ctx, String account) throws PMException {
-        UserContext userCtx = getUserCtxFromRequest(ctx);
-        MemoryPolicyStore memoryPolicyStore = loadPolicy(ctx);
-        PolicyReviewer reviewer = loadPolicyReviewer(ctx, memoryPolicyStore);
-        AccessRightSet accessRights = reviewer.getAccessRights(userCtx, accountObjectNodeName(account));
-
-        if(!accessRights.contains("upload_ato")) {
-            throw new PMException("user " + userCtx.getUser() + " cannot upload ato");
-        }
-    }
-
-    /**
-     * Check if the requesting user has "initiate_vote" on the object representing the target member of the vote. If they
-     * do call the initiateVote function defined in policy.pml to create the vote object and give initiator permissions
-     * on the vote object.
-     *
-     * @param ctx Chaincode context.
-     * @param voteID The ID of the vote.
+     * @param ctx          Chaincode context.
+     * @param voteID       The ID of the vote.
      * @param targetMember The target member of the vote.
+     *
      * @throws PMException If the requesting user cannot perform the action.
      */
     public void initiateVote(Context ctx, String voteID, String targetMember) throws PMException {
-        UserContext userCtx = getUserCtxFromRequest(ctx);
-        MemoryPolicyStore memoryPolicyStore = loadPolicy(ctx);
-        PolicyReviewer reviewer = loadPolicyReviewer(ctx, memoryPolicyStore);
-        AccessRightSet accessRights = reviewer.getAccessRights(userCtx, accountObjectNodeName(targetMember));
-
-        boolean result = accessRights.contains("initiate_vote");
-        if (!result) {
-            throw new PMException("user " + userCtx.getUser() + " cannot initiate vote");
-        }
-
-        PAP pap = new PAP(memoryPolicyStore);
-        String pml = String.format("initiateVote('%s', '%s', '%s')", ctx.getClientIdentity().getMSPID(), voteID, targetMember);
-        pap.executePML(userCtx, pml);
-
-        ctx.getStub().putState("policy", memoryPolicyStore.serialize().toJSON().getBytes(StandardCharsets.UTF_8));
+        String target = accountObjectNodeName(targetMember);
+        decideAndRespond(ctx, target, "initiate_vote", "initiateVote",
+                         new StringValue(ctx.getClientIdentity().getMSPID()),
+                         new StringValue(voteID),
+                         new StringValue(targetMember));
     }
 
     /**
@@ -180,68 +161,42 @@ public class BlossomPDP {
      * @throws PMException If the requesting user cannot perform the action.
      */
     public void vote(Context ctx, String voteID, String targetMember) throws PMException {
-        UserContext userCtx = getUserCtxFromRequest(ctx);
-        MemoryPolicyStore memoryPolicyStore = loadPolicy(ctx);
-        PolicyReviewer reviewer = loadPolicyReviewer(ctx, memoryPolicyStore);
-        AccessRightSet accessRights = reviewer.getAccessRights(userCtx, voteObj(targetMember, voteID));
-
-        if(!accessRights.contains("vote")) {
-            throw new PMException("user " + userCtx.getUser() + " cannot vote");
-        }
+        decide(ctx, voteObj(targetMember, voteID), "vote");
     }
 
     /**
      * Check if the requesting user has "complete_vote" on the vote object that represents the given vote.
      *
-     * @param ctx Chaincode context.
-     * @param voteID The ID of the vote.
+     * @param ctx          Chaincode context.
+     * @param voteID       The ID of the vote.
      * @param targetMember The target member of the vote.
+     *
      * @throws PMException If the requesting user cannot perform the action.
      */
-    public void completeVote(Context ctx, String voteID, String targetMember) throws PMException {
-        UserContext userCtx = getUserCtxFromRequest(ctx);
-        MemoryPolicyStore memoryPolicyStore = loadPolicy(ctx);
-        PolicyReviewer reviewer = loadPolicyReviewer(ctx, memoryPolicyStore);
-        AccessRightSet accessRights = reviewer.getAccessRights(userCtx, voteObj(targetMember, voteID));
-
-        if(!accessRights.contains("complete_vote")) {
-            throw new PMException("user " + userCtx.getUser() + " cannot complete vote");
-        }
-
-        PAP pap = new PAP(memoryPolicyStore);
-        String pml = String.format("completeVote('%s', '%s')", voteID, targetMember);
-        pap.executePML(userCtx, pml);
-
-        ctx.getStub().putState("policy", memoryPolicyStore.serialize().toJSON().getBytes(StandardCharsets.UTF_8));
+    public void certifyVote(Context ctx, String voteID, String targetMember) throws PMException {
+        String target = voteObj(targetMember, voteID);
+        decideAndRespond(ctx, target, "certify_vote", "endVote",
+                         new StringValue(voteID),
+                         new StringValue(targetMember));
     }
 
     /**
-     * Check if the requesting user has "complete_vote" on the vote object that represents the given vote.
+     * Check if the requesting user has "abort_vote" on the vote object that represents the given vote.
      *
-     * @param ctx Chaincode context.
-     * @param voteID The ID of the vote.
+     * @param ctx          Chaincode context.
+     * @param voteID       The ID of the vote.
      * @param targetMember The target member of the vote.
+     *
      * @throws PMException If the requesting user cannot perform the action.
      */
-    public void deleteVote(Context ctx, String voteID, String targetMember) throws PMException {
-        UserContext userCtx = getUserCtxFromRequest(ctx);
-        MemoryPolicyStore memoryPolicyStore = loadPolicy(ctx);
-        PolicyReviewer reviewer = loadPolicyReviewer(ctx, memoryPolicyStore);
-        AccessRightSet accessRights = reviewer.getAccessRights(userCtx, voteObj(targetMember, voteID));
-
-        boolean result = accessRights.contains("delete_vote");
-        if (!result) {
-            throw new PMException("user " + userCtx.getUser() + " cannot delete vote");
-        }
-
-        PAP pap = new PAP(memoryPolicyStore);
-        String pml = String.format("deleteVote('%s', '%s', '%s')", ctx.getClientIdentity().getMSPID(), voteID, targetMember);
-        pap.executePML(userCtx, pml);
-
-        ctx.getStub().putState("policy", memoryPolicyStore.serialize().toJSON().getBytes(StandardCharsets.UTF_8));
+    public void abortVote(Context ctx, String voteID, String targetMember) throws PMException {
+        String target = voteObj(targetMember, voteID);
+        decideAndRespond(ctx, target, "abort_vote", "endVote",
+                         new StringValue(voteID),
+                         new StringValue(targetMember));
     }
 
-    public static MemoryPolicyStore loadPolicy(Context ctx) throws PMException {
+    public static MemoryPolicyStore loadPolicy(Context ctx, UserContext userCtx) throws PMException {
         byte[] policy = ctx.getStub().getState("policy");
         if (policy == null) {
             throw new PMException("ngac policy has not been initialized");
@@ -250,11 +205,81 @@ public class BlossomPDP {
         String json = new String(policy, StandardCharsets.UTF_8);
 
         MemoryPolicyStore memoryPolicyStore = new MemoryPolicyStore();
-        memoryPolicyStore
-                .deserialize()
-                .fromJSON(json);
+        memoryPolicyStore.deserialize(userCtx, json, new JSONDeserializer());
 
         return memoryPolicyStore;
+    }
+
+    private void decide(Context ctx, String target, String ar) throws PMException {
+        UserContext userCtx = getUserCtxFromRequest(ctx);
+        MemoryPolicyStore memoryPolicyStore = loadPolicy(ctx, userCtx);
+        PAP pap = new PAP(memoryPolicyStore);
+        PolicyReviewer reviewer = loadPolicyReviewer(ctx, pap);
+
+        AccessRightSet accessRights = reviewer.access().computePrivileges(userCtx, target);
+
+        boolean result = accessRights.contains(ar);
+        if (!result) {
+            throw new UnauthorizedException(userCtx, target, ar);
+        }
+    }
+
+    private void decideWithoutAccountAttribute(Context ctx, String target, String ar) throws PMException {
+        UserContext userCtx = getUserCtxFromRequest(ctx);
+        MemoryPolicyStore memoryPolicyStore = loadPolicy(ctx, userCtx);
+        PAP pap = new PAP(memoryPolicyStore);
+        PolicyReviewer reviewer = loadPolicyReviewerWithoutAccountUA(ctx, pap);
+
+        AccessRightSet accessRights = reviewer.access().computePrivileges(userCtx, target);
+
+        boolean result = accessRights.contains(ar);
+        if (!result) {
+            throw new UnauthorizedException(userCtx, target, ar);
+        }
+    }
+
+    private void decideWithoutAccountAttributeAndRespond(Context ctx, String target, String ar, String function, Value ... args) throws PMException {
+        UserContext userCtx = getUserCtxFromRequest(ctx);
+        MemoryPolicyStore memoryPolicyStore = loadPolicy(ctx, userCtx);
+        PAP pap = new PAP(memoryPolicyStore);
+        PolicyReviewer reviewer = loadPolicyReviewerWithoutAccountUA(ctx, pap);
+
+        AccessRightSet accessRights = reviewer.access().computePrivileges(userCtx, target);
+
+        boolean result = accessRights.contains(ar);
+        if (!result) {
+            throw new UnauthorizedException(userCtx, target, ar);
+        }
+
+        pap.executePMLFunction(userCtx, function, args);
+
+        // remove user before committing to the ledger
+        memoryPolicyStore.graph().deleteNode(userCtx.getUser());
+
+        ctx.getStub().putState("policy", memoryPolicyStore.serialize(new JSONSerializer()).getBytes(StandardCharsets.UTF_8));
+    }
+
+    private void decideAndRespond(Context ctx, String target, String ar, String function, Value ... args) throws PMException {
+        UserContext userCtx = getUserCtxFromRequest(ctx);
+        MemoryPolicyStore memoryPolicyStore = loadPolicy(ctx, userCtx);
+        PAP pap = new PAP(memoryPolicyStore);
+        PolicyReviewer reviewer = loadPolicyReviewer(ctx, pap);
+
+        AccessRightSet accessRights = reviewer.access().computePrivileges(userCtx, target);
+
+        boolean result = accessRights.contains(ar);
+        if (!result) {
+            throw new UnauthorizedException(userCtx, target, ar);
+        }
+
+        pap.executePMLFunction(userCtx, function, args);
+
+        // remove user before committing to the ledger
+        pap.graph().deleteNode(userCtx.getUser());
+
+        // save policy updates
+        ctx.getStub().putState("policy", pap.serialize(new JSONSerializer()).getBytes(StandardCharsets.UTF_8));
+
     }
 
     private String accountUsersNodeName(String mspid) {
@@ -262,11 +287,11 @@ public class BlossomPDP {
     }
 
     private String accountContainerNodeName(String mspid) {
-        return mspid + " account attr";
+        return mspid + " account";
     }
 
     private String accountObjectNodeName(String mspid) {
-        return mspid + " account";
+        return mspid + " target";
     }
 
     private String voteUA(String targetMember) {
@@ -280,10 +305,9 @@ public class BlossomPDP {
     private static String getNGACUserName(Context ctx) {
         ClientIdentity clientIdentity = ctx.getClientIdentity();
         X509Certificate cert = clientIdentity.getX509Certificate();
-        X500Principal principal = cert.getSubjectX500Principal();
         String mspid = ctx.getClientIdentity().getMSPID();
 
-        String user = "";
+        String user;
         try {
             JcaX509CertificateHolder jcaX509CertificateHolder = new JcaX509CertificateHolder(cert);
             X500Name subject = jcaX509CertificateHolder.getSubject();
@@ -297,42 +321,52 @@ public class BlossomPDP {
         return user + ":" + mspid;
     }
 
-    private UserContext getUserCtxFromRequest(Context ctx) {
+    public static UserContext getUserCtxFromRequest(Context ctx) {
         return new UserContext(getNGACUserName(ctx));
     }
 
-    private PolicyReviewer loadPolicyReviewer(Context ctx, Policy policy) throws PMException {
+    PolicyReviewer loadPolicyReviewer(Context ctx, PAP policy) throws PMException {
         String ngacUserName = getNGACUserName(ctx);
         String mspid = ctx.getClientIdentity().getMSPID();
         String role = ctx.getClientIdentity().getAttributeValue(BLOSSOM_ROLE_ATTR);
+        String accountUA = accountUsersNodeName(mspid);
+
+        if (!policy.graph().nodeExists(role)) {
+            throw new PMException("unknown user role: " + role);
+        } else if (!policy.graph().nodeExists(accountUA)) {
+            throw new PMException("account " + mspid + " has not yet joined");
+        }
 
         // create the calling user in the graph and assign to appropriate attributes
-        policy.graph().createUser(ngacUserName, accountUsersNodeName(mspid), role);
+        policy.graph().createUser(ngacUserName, accountUA, role);
 
         // check if user is blossom admin
-        if (getAdminMSPID(policy).equals(mspid) && role.equals(SYSTEM_OWNER_UA)) {
-             policy.graph().assign(ngacUserName, "Blossom Admin");
+        if (getAdminMSPID(policy).equals(mspid) && role.equals(AUTHORIZING_OFFICIAL)) {
+            policy.graph().assign(ngacUserName, "Blossom Admin");
         }
 
         // create a new PolicyReviewer object to make a decision
-        return new MemoryPolicyReviewer(policy);
+        return new PolicyReviewer(policy);
     }
 
-    private PolicyReviewer loadPolicyReviewerWithoutAccountUA(Context ctx, Policy policy) throws PMException {
+    private PolicyReviewer loadPolicyReviewerWithoutAccountUA(Context ctx, PAP policy) throws PMException {
         String ngacUserName = getNGACUserName(ctx);
         String mspid = ctx.getClientIdentity().getMSPID();
         String role = ctx.getClientIdentity().getAttributeValue(BLOSSOM_ROLE_ATTR);
 
-        // create the calling user in the graph and assign to appropriate attributes
+        if (!policy.graph().nodeExists(role)) {
+            throw new PMException("unknown user role: " + role);
+        }
+
+        // create the user in the policy
         policy.graph().createUser(ngacUserName, role);
 
-        // a user is a Blossom Admin if 1) they are in the admin msp and 2) they are a system owner
-        if (getAdminMSPID(policy).equals(mspid) && role.equals(SYSTEM_OWNER_UA)) {
-             policy.graph().assign(ngacUserName, "Blossom Admin");
+        // a user is a Blossom Admin if 1) they are in the admin msp and 2) they are a Authorizing Official
+        if (getAdminMSPID(policy).equals(mspid) && role.equals(AUTHORIZING_OFFICIAL)) {
+            policy.graph().assign(ngacUserName, "Blossom Admin");
         }
 
         // create a new PolicyReviewer object to make a decision
-        return new MemoryPolicyReviewer(policy);
+        return new PolicyReviewer(policy);
     }
-
 }
