@@ -42,9 +42,11 @@ _Note: The users MSPID is determined by the Fabric CA the identity is registered
 ### Overview
 There are three contracts defined in the authorization chaincode:
 
-- **bootstrap** - Initialize the NGAC policy and Blossom Admin account. For function documentation see [BootstrapContract.java](./authorization/src/main/java/contract/BootstrapContract.java).
-- **account** - Create Blossom accounts and retrieve account information. For function documentation see [AccountContract.java](./authorization/src/main/java/contract/AccountContract.java).
-- **vote** - Vote on Blossom member security statuses. For function documentation see [VoteContract.java](./authorization/src/main/java/contract/VoteContract.java).
+- **[bootstrap](./authorization/src/main/java/contract/BootstrapContract.java)** - Initialize the NGAC policy and Blossom Admin account.
+- **[mou](./authorization/src/main/java/contract/MOUContract.java)** - Update, retrieve and sign the Blossom MOU. Officially join the network. 
+- **[ato](./authorization/src/main/java/contract/ATOContract.java)** - Create, update, and provide feedback on ATOs.
+- **[account](./authorization/src/main/java/contract/AccountContract.java)** - Retrieve account information including status.
+- **[vote](./authorization/src/main/java/contract/VoteContract.java)** - Vote on Blossom member statuses.
 
 ### Roles
 There is only one end user role supported by the Blossom authorization chaincode: `Authorizing Official`.
