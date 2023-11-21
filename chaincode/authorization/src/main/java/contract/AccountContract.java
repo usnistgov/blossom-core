@@ -45,11 +45,11 @@ public class AccountContract implements ContractInterface {
     }
 
     /**
-     * Get all accounts in blossom.
+     * Get all accounts in Blossom.
      *
      * NGAC: none.
      *
-     * @param ctx Chaincode context which stores the requesting CID and exposes world state functions.
+     * @param ctx Fabric context object.
      * @return A list of Accounts.
      * @throws ChaincodeException if an error occurs iterating through accounts on the ledger.
      */
@@ -74,7 +74,7 @@ public class AccountContract implements ContractInterface {
      *
      * NGAC: none.
      *
-     * @param ctx Chaincode context which stores the requesting CID and exposes world state functions.
+     * @param ctx Fabric context object.
      * @param mspid The account to return.
      * @return The account information of the account with the given MSPID.
      * @throws ChaincodeException if an account with the given MSPID does not exist.
@@ -94,7 +94,7 @@ public class AccountContract implements ContractInterface {
      *
      * NGAC: none.
      *
-     * @param ctx Chaincode context which stores the requesting CID and exposes world state functions.
+     * @param ctx Fabric context object.
      * @return The status of the account.
      * @throws ChaincodeException If the account in the CID does not exist.
      */
@@ -112,7 +112,7 @@ public class AccountContract implements ContractInterface {
      *
      * NGAC: none.
      *
-     * @param ctx Chaincode context which stores the requesting CID and exposes world state functions.
+     * @param ctx Fabric context object.
      * @param mspid The MSPID of the account to get the history for.
      * @return A list of HistorySnapshots containing the history of the given account.
      */

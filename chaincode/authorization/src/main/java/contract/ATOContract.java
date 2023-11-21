@@ -30,13 +30,17 @@ public class ATOContract implements ContractInterface {
     private BlossomPDP pdp = new BlossomPDP();
 
     /**
-     * Create a new ATO for the account the requesting CID belongs to. This will create a new ID using the transaction
-     * id, reset the version to 1, and remove feedback for the previous version.
+     * Create a new ATO for the account the CID belongs to. This will create a new ID using the transaction
+     * id, reset the version to 1, and remove feedback from the previous version.
+     *
+     * event:
+     *  - name: "CreateATO"
+     *  - payload: a serialized Account object
      *
      * @param ctx Fabric context object.
      * @param memo The ATO memo value.
      * @param artifacts The ATO artifacts value.
-     * @throws PMException If the user is unauthorized or there is an error checking if the user is unauthorized.
+     * @throws PMException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
      */
     public void CreateATO(Context ctx, String memo, String artifacts) throws PMException {
         String mspid = ctx.getClientIdentity().getMSPID();
@@ -58,14 +62,17 @@ public class ATOContract implements ContractInterface {
     }
 
     /**
-     * Update the ATO for the account the requesting CID belongs to. This will increment the ATO version and update
-     * the memo and artifacts fields. If either parameter is empty or null, the existing value will not be updated
-     * to an empty string.
+     * Update the ATO for the account the CID belongs to. This will increment the ATO version and update
+     * the memo and artifacts fields. If either parameter is empty or null, the existing value will not be updated.
+     *
+     * event:
+     *  - name: "UpdateATO"
+     *  - payload: a serialized Account object
      *
      * @param ctx Fabric context object.
      * @param memo The ATO memo value.
      * @param artifacts The ATO artifacts value.
-     * @throws PMException If the user is unauthorized or there is an error checking if the user is unauthorized.
+     * @throws PMException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
      */
     public void UpdateATO(Context ctx, String memo, String artifacts) throws PMException {
         String mspid = ctx.getClientIdentity().getMSPID();
@@ -91,6 +98,20 @@ public class ATOContract implements ContractInterface {
         ctx.getStub().setEvent("UpdateATO", bytes);
     }
 
+    /**
+     * Submit feedback on a member's ATO. The provided ATO version must match the member's current ATO version to ensure
+     * the feedback is happening on the most recent version. The comments are stored in a string.
+     *
+     * event:
+     *  - name: "SubmitFeedback"
+     *  - payload: a serialized Account object
+     *
+     * @param ctx Fabric context object.
+     * @param targetOrg The org to provide feedback to.
+     * @param atoVersion The ATO version the feedback is addressing.
+     * @param comments The comments provided.
+     * @throws PMException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
+     */
     @Transaction
     public void SubmitFeedback(Context ctx, String targetOrg, int atoVersion, String comments) throws PMException {
         String mspid = ctx.getClientIdentity().getMSPID();

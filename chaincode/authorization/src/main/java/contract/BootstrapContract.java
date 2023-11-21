@@ -37,11 +37,10 @@ import static contract.AccountContract.accountKey;
 public class BootstrapContract implements ContractInterface {
 
     /**
-     * Bootstrap the blossom authorization chaincode by initializing the NGAC policy and setting up the Blossom Admin
-     * member account status. An ATO is required in the request in order to set the Blossom Admin account's status
-     * to "AUTHORIZED". Once additional members are added to Blossom, those members may vote (using a super majority) to
-     * rescind the Blossom Admin's authorized status if the ATO provided during bootstrapping is not satisfactory.
-     * Only a users from the AdminMSP defined in policy.pml can call this method. This method can only be called once.
+     * Bootstrap the Blossom authorization chaincode by initializing the NGAC policy. The account identified by the ADMINMSP
+     * constant in the policy.pml file will automatically be set to AUTHORIZED. Once additional members are added to the
+     * network, those members may vote (using a super majority) to rescind the Blossom Admin's authorized status if deemed
+     * necessary. Only a users from the ADMINMSP defined in policy.pml can call this method. This method can only be called once.
      *
      * NGAC: Only an Authorizing Official from the Blossom Admin member can call this function.
      *

@@ -41,11 +41,37 @@ public class VoteContract implements ContractInterface {
 
     private BlossomPDP pdp = new BlossomPDP();
 
+    /**
+     * Get the current voting configuration.
+     *
+     * @param ctx Fabric context object.
+     * @return a VoteConfiguration object.
+     */
     @Transaction
     public VoteConfiguration GetVoteConfiguration(Context ctx) {
         return SerializationUtils.deserialize(ctx.getStub().getState(VOTE_CONFIG_KEY));
     }
 
+    /**
+     * Update the Blossom voting configuration. There are four possible configuration options:
+     * - voteOnSelf (default=true):                             if true, members can participate when there are the target of a proposed status change vote.
+     * - voteWhenNotAuthorized (default=true):                  if true, members can participate in votes even if their status is PENDING or NOT_AUTHORIZED
+     * - initiateVoteOnSelfWhenNotAuthorized (default=true):    if true, members can initiate a vote on themselves if their status is PENDING or NOT_AUTHORIZED
+     * - certifyOrAbortVoteWhenNotAuthorized (default=false):   if true, members can certify or abort a vote if their status is PENDING or NOT_AUTHORIZED
+     *
+     * Note: voteOnSelf is the only configuration option not enforced in NGAC. If the vote configuration is updated after
+     * a member votes on themselves but before certification, then their vote will not count during the certification process.
+     *
+     * NGAC: Only an Authorizing Official of the ADMINMSP can call this function.
+     *
+     * event:
+     *  - name: "UpdateVoteConfiguration"
+     *  - payload: a serialized VoteConfiguration object
+     *
+     * @param ctx
+     * @param voteConfiguration
+     * @throws PMException
+     */
     @Transaction
     public void UpdateVoteConfiguration(Context ctx, VoteConfiguration voteConfiguration) throws PMException {
         pdp.updateVoteConfig(ctx, voteConfiguration);
@@ -57,17 +83,20 @@ public class VoteContract implements ContractInterface {
     }
 
     /**
-     * Initiate a vote to change the status of a Blossom member.
+     * Initiate a vote to change the status of a Blossom member. The account that initiates the vote will be assigned
+     * to the vote initiator role for this vote. This will give them the ability to certify or abort the vote. The ADMINMSP
+     * can also certify or abort any vote but are also subject to the policy changes caused by vote configuration. Votes
+     * on the ADMINMSP require a super majority (> 2/3) to pass, while all other members require a simple majority (> 1/2)
+     * to pass.
      *
-     * NGAC: Only users with the "Authorizing Official" attribute can initiate a vote. Any member can initiate a vote on another
-     * member, including the Blossom Admin member, as long as they have an "AUTHORIZED" status. Members with pending or
-     * unauthorized statuses will only be able to initiate a vote on themselves. Votes on the Blossom Admin require a
-     * super majority (> 2/3) to pass, while all other members require a simple majority (> 1/2) to pass.
+     * NGAC: Only users with the "Authorizing Official" attribute can initiate a vote. Successfully casting a vote also
+     * depends on the vote configuration.
      *
-     * The account that initiates the vote will be assigned to the vote initiator role for this vote. This will give them
-     * the ability to complete or delete the vote.
+     * event:
+     *  - name: "InitiateVote"
+     *  - payload: a serialized Vote object
      *
-     * @param ctx Chaincode context which stores the requesting CID and exposes world state functions.
+     * @param ctx Fabric context object.
      * @param targetMSPID The MSPID of the target of the vote.
      * @param statusChange A string representation of the intended status change if the vote is successful.
      * @param reason The reason for initiating the vote. Can be null or empty.
@@ -123,8 +152,11 @@ public class VoteContract implements ContractInterface {
      * NGAC: Only the Blossom Admin and vote initiator have the permission to complete a vote. However, in both cases
      * if the account is pending or unauthorized they will be unable to complete a vote.
      *
+     * event:
+     *  - name: "CertifyVote"
+     *  - payload: a serialized Vote object
      *
-     * @param ctx Chaincode context which stores the requesting CID and exposes world state functions.
+     * @param ctx Fabric context object.
      * @param id The id of the vote to complete.
      * @param targetMember The target member of the vote.
      * @return true if the vote passed, false otherwise.
@@ -206,13 +238,16 @@ public class VoteContract implements ContractInterface {
     }
 
     /**
-     * Delete an ongoing vote. If a vote is deleted, the proposed status change will not take effect. Votes cannot be
-     * deleted if they have already been completed using CompleteVote.
+     * Abort an ongoing vote. If a vote is aborted, the proposed status change will not take effect. Votes cannot be
+     * deleted if they have already been certified using CertifyVote.
      *
-     * NGAC: Only the member that initiated the vote can delete a vote. The Blossom Admin cannot delete a vote, unless
-     * they initiated it.
+     * NGAC: Only an Authorizing Official at the initiating member or the ADMINMSP can abort a vote.
      *
-     * @param ctx Chaincode context which stores the requesting CID and exposes world state functions.
+     * event:
+     *  - name: "AbortVote"
+     *  - payload: a serialized Vote object
+     *
+     * @param ctx Fabric context object.
      * @param id The ID of the vote to delete.
      * @param targetMember The target of the vote.
      * @throws VoteDoesNotExistException If the vote does not exist.
@@ -241,12 +276,16 @@ public class VoteContract implements ContractInterface {
 
     /**
      * Vote as the requesting CID's MSPID for a vote with the given ID and target member. Members can overwrite their
-     * votes as long as the vote has not been completed yet. Votes are stored in each member's implicit data collection.
+     * votes as long as the vote has not been certified yet. Votes are stored in each member's implicit data collection.
      *
-     * NGAC: Only users with the "Authorizing Official" attribute can vote. All members can vote. Even members with pending or
-     * unauthorized statuses.
+     * NGAC: Only users with the "Authorizing Official" attribute can vote. Voting ability is subject to the vote configuration
+     * policy.
      *
-     * @param ctx Chaincode context which stores the requesting CID and exposes world state functions.
+     * event:
+     *  - name: "Vote"
+     *  - payload: a serialized Vote object
+     *
+     * @param ctx Fabric context object.
      * @param id The ID of the vote.
      * @param targetMember The target of the vote.
      * @param value The requesting CID's vote. True is "yes" and false is "no".
@@ -310,7 +349,7 @@ public class VoteContract implements ContractInterface {
      *
      * NGAC: none.
      *
-     * @param ctx Chaincode context which stores the requesting CID and exposes world state functions.
+     * @param ctx Fabric context object.
      * @param id The ID of the vote.
      * @param member The target member.
      * @return The vote with the given ID and target member.
@@ -333,7 +372,7 @@ public class VoteContract implements ContractInterface {
      *
      * NGAC: none.
      *
-     * @param ctx Chaincode context which stores the requesting CID and exposes world state functions.
+     * @param ctx Fabric context object.
      * @return A list of all votes.
      * @throws ChaincodeException If there is an issue with iterating over the votes from the world state.
      */
@@ -359,7 +398,7 @@ public class VoteContract implements ContractInterface {
      *
      * NGAC: none.
      *
-     * @param ctx Chaincode context which stores the requesting CID and exposes world state functions.
+     * @param ctx Fabric context object.
      * @return A list of all ongoing votes.
      * @throws ChaincodeException If there is an issue with iterating over the votes from the world state.
      */
@@ -390,7 +429,7 @@ public class VoteContract implements ContractInterface {
      *
      * NGAC: none.
      *
-     * @param ctx Chaincode context which stores the requesting CID and exposes world state functions.
+     * @param ctx Fabric context object.
      * @param mspid The MSPID to get all votes for.
      * @return A list of all votes that have ever occurred for the given member.
      * @throws ChaincodeException If there is an issue with iterating over the votes from the world state.
@@ -420,7 +459,7 @@ public class VoteContract implements ContractInterface {
      *
      * NGAC: none.
      *
-     * @param ctx Chaincode context which stores the requesting CID and exposes world state functions.
+     * @param ctx Fabric context object.
      * @param mspid The MSPID of the target member to get the ongoing vote for.
      * @return The ongoing vote fot the target member
      * @throws ChaincodeException If there is no ongoing vote for the given member.
