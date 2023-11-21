@@ -63,14 +63,14 @@ public class BlossomPDP {
 
     /**
      * Initialize the NGAC policy with the given PML string. The requesting user needs the "bootstrap" permission on the
-     * blossom system.
+     * blossom target.
      *
      * @param ctx               Chaincode context.
      * @param pml               The PML string to initialize an NGAC policy with.
      *
      * @return A PAP object that stores an in memory policy from the given PML.
      *
-     * @throws PMException If the requesting user cannot perform the action.
+     * @throws PMException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
      */
     public PAP bootstrap(Context ctx, String pml) throws PMException {
         UserContext userCtx = getUserCtxFromRequest(ctx);
@@ -93,29 +93,54 @@ public class BlossomPDP {
         return pap;
     }
 
+    /**
+     * Check if the cid has "update_mou" on BLOSSOM_TARGET
+     * @param ctx The Fabric context.
+     * @throws PMException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
+     */
     public void updateMOU(Context ctx) throws PMException {
         decide(ctx, BLOSSOM_TARGET, "update_mou");
     }
 
+    /**
+     * Check if the cid has "update_vote_config" on BLOSSOM_TARGET. If yes, invoke the updateVoteConfig function.
+     * @param ctx The Fabric context.
+     * @throws PMException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
+     */
     public void updateVoteConfig(Context ctx, VoteConfiguration voteConfiguration) throws PMException {
         decideAndRespond(ctx, BLOSSOM_TARGET, "update_vote_config",
                                 "updateVoteConfig", Value.fromObject(voteConfiguration));
     }
 
+    /**
+     * Check if the cid has "sign_mou" on BLOSSOM_TARGET. Since this can be called before an account is called, do not
+     * assign the user to the account user attribute, just the role.
+     *
+     * @param ctx The Fabric context.
+     * @throws PMException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
+     */
     public void signMOU(Context ctx) throws PMException {
         decideWithoutAccountAttribute(ctx, BLOSSOM_TARGET, "sign_mou");
     }
 
+    /**
+     * Check if the cid has "sign_mou" on BLOSSOM_TARGET. Since this can be called before an account is called, do not
+     * assign the user to the account user attribute, just the role. If yes, invoke the join function.
+     *
+     * @param ctx The Fabric context.
+     * @param account The account id.
+     * @throws PMException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
+     */
     public void join(Context ctx, String account) throws PMException {
         decideWithoutAccountAttributeAndRespond(ctx, BLOSSOM_TARGET, "join", "join", new StringValue(account));
     }
 
     /**
-     * Check if the requesting user has "write_ato" on the object representing the given account.
+     * Check if the cid has "write_ato" on <account> target.
      *
-     * @param ctx Chaincode context.
-     * @param account The account to upload the ATO for.
-     * @throws PMException If the requesting user cannot perform the action.
+     * @param ctx The Fabric context.
+     * @param account The account id.
+     * @throws PMException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
      */
     public void writeATO(Context ctx, String account) throws PMException {
         String target = accountObjectNodeName(account);
@@ -123,10 +148,11 @@ public class BlossomPDP {
     }
 
     /**
-     * Check if the requesting user has "submit_feedback" on the object representing the given account.
+     * Check if the cid has "submit_feedback" on <account> target.
      *
-     * @param ctx Chaincode context.
-     * @throws PMException If the requesting user cannot perform the action.
+     * @param ctx The Fabric context.
+     * @param targetMember The target of the feedback.
+     * @throws PMException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
      */
     public void submitFeedback(Context ctx, String targetMember) throws PMException {
         String target = accountObjectNodeName(targetMember);
@@ -134,15 +160,13 @@ public class BlossomPDP {
     }
 
     /**
-     * Check if the requesting user has "initiate_vote" on the object representing the target member of the vote. If
-     * they do call the initiateVote function defined in policy.pml to create the vote object and give initiator
-     * permissions on the vote object.
+     * Check if the cid has "initiate_vote" on <account> target. If yes, invoke the initiateVote function.
      *
      * @param ctx          Chaincode context.
      * @param voteID       The ID of the vote.
      * @param targetMember The target member of the vote.
      *
-     * @throws PMException If the requesting user cannot perform the action.
+     * @throws PMException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
      */
     public void initiateVote(Context ctx, String voteID, String targetMember) throws PMException {
         String target = accountObjectNodeName(targetMember);
@@ -153,25 +177,24 @@ public class BlossomPDP {
     }
 
     /**
-     * Check if the requesting user has "vote" on the vote object that represents the given vote.
+     * Check if the cid has "vote" on the vote object.
      *
      * @param ctx Chaincode context.
      * @param voteID The ID of the vote.
      * @param targetMember The target member of the vote.
-     * @throws PMException If the requesting user cannot perform the action.
+     * @throws PMException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
      */
     public void vote(Context ctx, String voteID, String targetMember) throws PMException {
         decide(ctx, voteObj(targetMember, voteID), "vote");
     }
 
     /**
-     * Check if the requesting user has "complete_vote" on the vote object that represents the given vote.
+     * Check if the cid has "certify_vote" on the vote object. if yes, invoke the endVote function.
      *
-     * @param ctx          Chaincode context.
-     * @param voteID       The ID of the vote.
+     * @param ctx Chaincode context.
+     * @param voteID The ID of the vote.
      * @param targetMember The target member of the vote.
-     *
-     * @throws PMException If the requesting user cannot perform the action.
+     * @throws PMException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
      */
     public void certifyVote(Context ctx, String voteID, String targetMember) throws PMException {
         String target = voteObj(targetMember, voteID);
@@ -181,13 +204,12 @@ public class BlossomPDP {
     }
 
     /**
-     * Check if the requesting user has "abort_vote" on the vote object that represents the given vote.
+     * Check if the cid has "abort_vote" on the vote object. if yes, invoke the endVote function.
      *
-     * @param ctx          Chaincode context.
-     * @param voteID       The ID of the vote.
+     * @param ctx Chaincode context.
+     * @param voteID The ID of the vote.
      * @param targetMember The target member of the vote.
-     *
-     * @throws PMException If the requesting user cannot perform the action.
+     * @throws PMException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
      */
     public void abortVote(Context ctx, String voteID, String targetMember) throws PMException {
         String target = voteObj(targetMember, voteID);
@@ -196,6 +218,13 @@ public class BlossomPDP {
                          new StringValue(targetMember));
     }
 
+    /**
+     * Load the policy from the context into memory.
+     * @param ctx The Fabric context.
+     * @param userCtx The user context representing the cid.
+     * @return The policy in memory.
+     * @throws PMException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
+     */
     public static MemoryPolicyStore loadPolicy(Context ctx, UserContext userCtx) throws PMException {
         byte[] policy = ctx.getStub().getState("policy");
         if (policy == null) {
