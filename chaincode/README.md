@@ -7,21 +7,9 @@ This package contains the code for the Blossom Smart Contracts. There are two Sm
 ### Status
 In general, an account can be authorized, pending, or unauthorized. The status an account has determines what actions they can perform in the Blossom system. The available statuses are:
 
-- **PENDING_APPROVAL** - waiting for approval
-- **PENDING_ATO** - waiting for ATO
-- **AUTHORIZED** - Authorized
-- **UNAUTHORIZED_DENIED** - account request denied
-- **UNAUTHORIZED_ATO** - ATO requires renewal
-- **UNAUTHORIZED_OPTOUT** - opted out
-- **UNAUTHORIZED_SECURITY_RISK** - security risk
-- **UNAUTHORIZED_ROB** - breach in rules of behavior
-
-### Roles
-There are three end user roles supported by the Blossom chaincode
-
-- **SystemOwner**: Can upload account ATOs and vote on status changes
-- **SystemAdministrator**: Can check out/check in licenses and report/delete SWID tags
-- **AcquisitionSpecialist**: Can audit their account's licenses
+- **PENDING**
+- **AUTHORIZED**
+- **UNAUTHORIZED**
 
 #### User Registration
 
@@ -58,21 +46,33 @@ There are three contracts defined in the authorization chaincode:
 - **account** - Create Blossom accounts and retrieve account information. For function documentation see [AccountContract.java](./authorization/src/main/java/contract/AccountContract.java).
 - **vote** - Vote on Blossom member security statuses. For function documentation see [VoteContract.java](./authorization/src/main/java/contract/VoteContract.java).
 
+### Roles
+There is only one end user role supported by the Blossom authorization chaincode: `Authorizing Official`.
+
 ### Next Generation Access Control  (NGAC)
-NGAC provides a layer of access control to the Blossom chaincode, ensuring operations are performed only by authorized users. NGAC uses **resource access rights** to refer to the set of operations possible on NGAC resources, in this case being accounts and votes. The resource access rights supported by the PDP are:
+NGAC provides a layer of access control to the Blossom chaincode, ensuring operations are performed only by authorized users. NGAC uses **resource access rights** to refer to the set of operations possible on NGAC resources. The resource access rights supported by the PDP are:
 
 - bootstrap
-- request_account
-- approve_account
-- upload_ato
+- update_vote_config
+- update_mou
+- get_mou
+- sign_mou
+- join
+- write_ato
 - initiate_vote
-- delete_vote
-- complete_vote
+- vote
+- abort_vote
+- certify_vote
+- submit_feedback
 
 These access rights are defined in the policy, and checked by the PDP. They are transparent to the chaincode business logic. The NGAC policy is defined in the [policy.pml](./authorization/src/main/resources/policy.pml) file embedded in the chaincode resource folder.
 
 ##### Blossom Admin
-Blossom Admin refers to the entity in the Blossom network that is responsible for bootstrapping the network. Specifically, the users with the System Owner role within this member. These users are granted extra permissions in the NGAC policy in order to maintain smooth operation of the Blossom system. The Blossom Admin account ID (MSPID) is hardcoded in the the [NGAC policy](/path to policy). This is the same policy loaded during bootstrapping. Hardcoding the Blossom Admin account ID in the policy ensures that any changes to the AdminMSP value requires review and approval from the rest of the network.
+Blossom Admin refers to the entity in the Blossom network that is responsible for bootstrapping the network. Specifically, the users with the `Authorizing Official` role within this member. 
+These users are granted extra permissions in the NGAC policy in order to maintain smooth operation of the Blossom system. 
+The Blossom Admin account ID (MSPID) is hardcoded in the [NGAC policy](./authorization/src/main/resources/policy.pml) defined as the ADMINMSP constant. 
+This is the policy loaded during bootstrapping. Hardcoding the Blossom Admin account ID in the policy ensures that any changes to the AdminMSP 
+value requires review and approval from the rest of the network.
 
 ### Build and Deploy
 
@@ -83,9 +83,9 @@ The first step before doing anything else is to set the Administrative MSPID in 
 all peers that install the chaincode will have the same Admin MSPID set. If two peers have different values for the Admin MSPID,  
 their packages will have different hashes and will fail the commit stage for approving two different packages.
 
-1. In [./authorization/src/main/resources/policy.pml](./authorization/src/main/resources/policy.pml) set the value of `AdminMSP` to the MSPID of the Blossom Admin member.
+1. In [./authorization/src/main/resources/policy.pml](./authorization/src/main/resources/policy.pml) set the value of `ADMINMSP` to the MSPID of the Blossom Admin member.
 
-   **Example:** `const AdminMSP = "SAMS-MSPID"`
+   **Example:** `const ADMINMSP = "SAMS-MSPID"`
 
 ##### Lifecycle Endorsement Policy
 
@@ -104,7 +104,6 @@ to ensure it is a majority of the members in the list.
 1. Build the Java chaincode.
 
    ```
-   cd /chaincode
    make clean-auth-cc build-auth-cc
    ```
 
@@ -177,14 +176,14 @@ There are three contracts defined in the authorization chaincode: **bootstrap**,
 
 - Command line - Specify the chaincode name using the `-n` arg. Prepend the contract name and a semi colon to the function name in the `-c` arg.
   ```shell
-  -n authorization -c '{"function":"account:RequestAccount","Args":[]}'
+  -n authorization -c '{"function":"account:GetAccounts","Args":[]}'
   ```
 - Node sdk - Specify the chaincode name and contract name in the `fabric-network.Network#getContract` method. Then pass the function name to `fabric-network.Contract#submitTransaction`.
   ```node
   // authorization = chaincode name
   // account = "contract name"
   let contract = network.getContract("authorization", "account");
-  contract.submitTransaction("RequestAccount")
+  contract.submitTransaction("GetAccounts")
   ```
 
 #### `--peerAddresses`
