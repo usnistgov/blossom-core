@@ -226,6 +226,20 @@ class BlossomPDPTest {
         }
 
         @Test
+        void testAuthorizedAsAdminAndPendingWithVoteConfigUpdate() throws Exception {
+            MockContext ctx = newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
+            pdp.initiateVote(ctx, "123", ORG2_MSP);
+
+            new VoteContract().UpdateVoteConfiguration(ctx, new VoteConfiguration(true, true, true, true));
+
+            ctx.setClientIdentity(MockIdentity.ORG1_AO);
+            updateAccountStatus(ctx, ORG1_MSP, PENDING.toString());
+            assertDoesNotThrow(() -> pdp.certifyVote(ctx, "123", ORG2_MSP));
+        }
+
+
+
+        @Test
         void testUnauthorizedAsSelfAndPending() throws Exception {
             MockContext ctx = newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
             pdp.initiateVote(ctx, "123", ORG2_MSP);
