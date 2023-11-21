@@ -208,6 +208,3 @@ function updateAccountStatus(string accountID, string status) {
         denyInitiateVoteAndSubmitFeedbackExceptOnSelf(accountUA, accountOA)
     }
 }
-
-
-
