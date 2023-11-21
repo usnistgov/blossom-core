@@ -1,3 +1,7 @@
+# Blossom Smart Contracts
+
+This package contains the code for the Blossom Smart Contracts. There are two Smart Contracts: Authorization and Assets (WIP).
+
 ## Common elements
 
 ### Status
@@ -50,9 +54,9 @@ _Note: The users MSPID is determined by the Fabric CA the identity is registered
 ### Overview
 There are three contracts defined in the authorization chaincode:
 
-- **bootstrap** - Initialize the NGAC policy and Blossom Admin account. For function documentation see [BootstrapContract.java]().
-- **account** - Create Blossom accounts and retrieve account information. For function documentation see [AccountContract.java]().
-- **vote** - Vote on Blossom member security statuses. For function documentation see [VoteContract]().
+- **bootstrap** - Initialize the NGAC policy and Blossom Admin account. For function documentation see [BootstrapContract.java](./authorization/src/main/java/contract/BootstrapContract.java).
+- **account** - Create Blossom accounts and retrieve account information. For function documentation see [AccountContract.java](./authorization/src/main/java/contract/AccountContract.java).
+- **vote** - Vote on Blossom member security statuses. For function documentation see [VoteContract.java](./authorization/src/main/java/contract/VoteContract.java).
 
 ### Next Generation Access Control  (NGAC)
 NGAC provides a layer of access control to the Blossom chaincode, ensuring operations are performed only by authorized users. NGAC uses **resource access rights** to refer to the set of operations possible on NGAC resources, in this case being accounts and votes. The resource access rights supported by the PDP are:
@@ -65,7 +69,7 @@ NGAC provides a layer of access control to the Blossom chaincode, ensuring opera
 - delete_vote
 - complete_vote
 
-These access rights are defined in the policy, and checked by the PDP. They are transparent to the chaincode business logic.
+These access rights are defined in the policy, and checked by the PDP. They are transparent to the chaincode business logic. The NGAC policy is defined in the [policy.pml](./authorization/src/main/resources/policy.pml) file embedded in the chaincode resource folder.
 
 ##### Blossom Admin
 Blossom Admin refers to the entity in the Blossom network that is responsible for bootstrapping the network. Specifically, the users with the System Owner role within this member. These users are granted extra permissions in the NGAC policy in order to maintain smooth operation of the Blossom system. The Blossom Admin account ID (MSPID) is hardcoded in the the [NGAC policy](/path to policy). This is the same policy loaded during bootstrapping. Hardcoding the Blossom Admin account ID in the policy ensures that any changes to the AdminMSP value requires review and approval from the rest of the network.
@@ -79,7 +83,7 @@ The first step before doing anything else is to set the Administrative MSPID in 
 all peers that install the chaincode will have the same Admin MSPID set. If two peers have different values for the Admin MSPID,  
 their packages will have different hashes and will fail the commit stage for approving two different packages.
 
-1. In [/authorization/src/main/resources/policy.pml](/authorization/src/main/resources/policy.pml) set the value of `AdminMSP` to the MSPID of the Blossom Admin member.
+1. In [./authorization/src/main/resources/policy.pml](./authorization/src/main/resources/policy.pml) set the value of `AdminMSP` to the MSPID of the Blossom Admin member.
 
    **Example:** `const AdminMSP = "SAMS-MSPID"`
 
@@ -157,14 +161,14 @@ to ensure it is a majority of the members in the list.
 
 7. Commit chaincode.
 
-```shell  
-peer lifecycle chaincode commit \    
--o $ORDERER \    
---tls --cafile $ORDERER_CA \    
---channelID $CHANNEL --name authorization \    
---peerAddresses <PEER_ADDRESS> --tlsRootCertFiles <path to peer tls ca cert> \    
---version 1.0 --sequence 1
-```  
+   ```shell  
+   peer lifecycle chaincode commit \    
+   -o $ORDERER \    
+   --tls --cafile $ORDERER_CA \    
+   --channelID $CHANNEL --name authorization \    
+   --peerAddresses <PEER_ADDRESS> --tlsRootCertFiles <path to peer tls ca cert> \    
+   --version 1.0 --sequence 1
+   ```  
 
 The `--peerAddresses`  arg specifies 1 or more peers that **have approved the chaincode** to target for the commit transaction.  This is when the [lifecycle endorsement policy](#lifecycle-endorsement-policy) will be checked. An endorsement policy error will be returned if not enough organizations have approved the chaincode to satisfy the policy.
 
@@ -172,25 +176,22 @@ The `--peerAddresses`  arg specifies 1 or more peers that **have approved the ch
 There are three contracts defined in the authorization chaincode: **bootstrap**, **account**, and **vote**. In order to invoke a contract function, you will need to specify the chaincode name, contract name, and function name.
 
 - Command line - Specify the chaincode name using the `-n` arg. Prepend the contract name and a semi colon to the function name in the `-c` arg.
-```shell
--n authorization -c '{"function":"account:RequestAccount","Args":[]}'
-```
+  ```shell
+  -n authorization -c '{"function":"account:RequestAccount","Args":[]}'
+  ```
 - Node sdk - Specify the chaincode name and contract name in the `fabric-network.Network#getContract` method. Then pass the function name to `fabric-network.Contract#submitTransaction`.
-```node
-// authorization = chaincode name
-// account = "contract name"
-let contract = network.getContract("authorization", "account");
-contract.submitTransaction("RequestAccount")
-```
+  ```node
+  // authorization = chaincode name
+  // account = "contract name"
+  let contract = network.getContract("authorization", "account");
+  contract.submitTransaction("RequestAccount")
+  ```
 
 #### `--peerAddresses`
 - 1 or more peers that have approved the chaincode to target for invoke.
 - This is only needed if more than one peer is needed for endorsement.
 - If an org did not approve the chaincode, they will need to target a org that did or else an error will occur.
 - If an org did approve the chaincode, they do not need to target another peer.
-
-
-
 
 ## Assets
 WIP
