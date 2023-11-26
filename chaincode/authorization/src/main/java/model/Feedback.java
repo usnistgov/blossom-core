@@ -14,7 +14,7 @@ public class Feedback implements Serializable {
     private int atoVersion;
 
     @Property
-    private String org;
+    private String targetAccountId;
 
     @Property
     private String comments;
@@ -22,9 +22,9 @@ public class Feedback implements Serializable {
     public Feedback() {
     }
 
-    public Feedback(@JsonProperty int atoVersion, @JsonProperty String org, @JsonProperty String comments) {
+    public Feedback(@JsonProperty int atoVersion, @JsonProperty String targetAccountId, @JsonProperty String comments) {
         this.atoVersion = atoVersion;
-        this.org = org;
+        this.targetAccountId = targetAccountId;
         this.comments = comments;
     }
 
@@ -36,12 +36,12 @@ public class Feedback implements Serializable {
         this.atoVersion = atoVersion;
     }
 
-    public String getOrg() {
-        return org;
+    public String getTargetAccountId() {
+        return targetAccountId;
     }
 
-    public void setOrg(String org) {
-        this.org = org;
+    public void setTargetAccountId(String targetAccountId) {
+        this.targetAccountId = targetAccountId;
     }
 
     public String getComments() {
@@ -61,20 +61,20 @@ public class Feedback implements Serializable {
             return false;
         }
         Feedback feedback = (Feedback) o;
-        return atoVersion == feedback.atoVersion && Objects.equals(org, feedback.org) && Objects.equals(
+        return atoVersion == feedback.atoVersion && Objects.equals(targetAccountId, feedback.targetAccountId) && Objects.equals(
                 comments, feedback.comments);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(atoVersion, org, comments);
+        return Objects.hash(atoVersion, targetAccountId, comments);
     }
 
     @Override
     public String toString() {
         return "Feedback{" +
                 "atoVersion=" + atoVersion +
-                ", org='" + org + '\'' +
+                ", org='" + targetAccountId + '\'' +
                 ", comments='" + comments + '\'' +
                 '}';
     }

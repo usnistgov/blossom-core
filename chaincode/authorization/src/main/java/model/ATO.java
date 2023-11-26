@@ -110,6 +110,19 @@ public class ATO implements Serializable {
         this.feedback.add(feedback);
     }
 
+    public void update(int version, String lastUpdatedTimestamp, String memo, String artifacts) {
+        setVersion(version);
+        setLastUpdatedTimestamp(lastUpdatedTimestamp);
+
+        if (memo != null && !memo.isEmpty()) {
+            setMemo(memo);
+        }
+
+        if (artifacts != null && !artifacts.isEmpty()) {
+            setArtifacts(artifacts);
+        }
+    }
+
     public static ATO createFromContext(Context ctx, String memo, String artifacts) {
         return new ATO(
                 ctx.getStub().getTxId(),

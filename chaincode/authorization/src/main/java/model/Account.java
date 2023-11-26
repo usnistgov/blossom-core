@@ -25,11 +25,6 @@ public class Account implements Serializable {
     @Property
     private Status status;
 
-    /**
-     * Account ATO
-     */
-    @Property
-    private ATO ato;
 
     /**
      * The most recent version of the MOU that the account has signed.
@@ -37,15 +32,20 @@ public class Account implements Serializable {
     @Property
     private int mouVersion;
 
+    /**
+     * Indicates the accounts commitment to join.
+     */
+    @Property
+    private boolean joined;
+
     public Account() {
     }
 
-    public Account(@JsonProperty String id, @JsonProperty Status status,
-                   @JsonProperty ATO ato, @JsonProperty int mouVersion) {
+    public Account(@JsonProperty String id, @JsonProperty Status status, @JsonProperty int mouVersion, @JsonProperty boolean joined) {
         this.id = id;
         this.status = status;
-        this.ato = ato;
         this.mouVersion = mouVersion;
+        this.joined = joined;
     }
 
     public String getId() {
@@ -64,14 +64,6 @@ public class Account implements Serializable {
         this.status = status;
     }
 
-    public ATO getAto() {
-        return ato;
-    }
-
-    public void setAto(ATO ato) {
-        this.ato = ato;
-    }
-
     public int getMouVersion() {
         return mouVersion;
     }
@@ -80,21 +72,12 @@ public class Account implements Serializable {
         this.mouVersion = mouVersion;
     }
 
-    public void updateATO(int version, String lastUpdatedTimestamp, String memo, String artifacts) {
-        ato.setVersion(version);
-        ato.setLastUpdatedTimestamp(lastUpdatedTimestamp);
-
-        if (memo != null && !memo.isEmpty()) {
-            ato.setMemo(memo);
-        }
-
-        if (artifacts != null && !artifacts.isEmpty()) {
-            ato.setArtifacts(artifacts);
-        }
+    public boolean isJoined() {
+        return joined;
     }
 
-    public void addATOFeedback(Feedback feedback) {
-        this.ato.addFeedback(feedback);
+    public void setJoined(boolean joined) {
+        this.joined = joined;
     }
 
     @Override
@@ -106,13 +89,13 @@ public class Account implements Serializable {
             return false;
         }
         Account account = (Account) o;
-        return mouVersion == account.mouVersion && Objects.equals(
-                id, account.id) && status == account.status && Objects.equals(ato, account.ato);
+        return mouVersion == account.mouVersion && joined == account.joined && Objects.equals(
+                id, account.id) && status == account.status;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, status, ato, mouVersion);
+        return Objects.hash(id, status, mouVersion, joined);
     }
 
     @Override
@@ -120,8 +103,8 @@ public class Account implements Serializable {
         return "Account{" +
                 "id='" + id + '\'' +
                 ", status=" + status +
-                ", ato='" + ato + '\'' +
                 ", mouVersion=" + mouVersion +
+                ", joined=" + joined +
                 '}';
     }
 }

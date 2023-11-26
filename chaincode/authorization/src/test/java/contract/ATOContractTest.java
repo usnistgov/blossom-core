@@ -1,5 +1,7 @@
 package contract;
 
+import contract.event.ATOEvent;
+import contract.event.SubmitFeedbackEvent;
 import gov.nist.csd.pm.policy.exceptions.PMException;
 import mock.MockContext;
 import mock.MockEvent;
@@ -12,6 +14,7 @@ import org.hyperledger.fabric.shim.ChaincodeException;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -39,7 +42,7 @@ public class ATOContractTest {
             mockCtx.setTxId("123");
             contract.CreateATO(mockCtx, "memo", "artifacts");
 
-            Account account = new AccountContract().GetAccount(mockCtx, "Org2MSP");
+            ATO ato = contract.GetATO(mockCtx, ORG2_MSP);
             assertEquals(
                     new ATO(
                             "123",
@@ -50,7 +53,7 @@ public class ATOContractTest {
                             "artifacts",
                             new ArrayList<>()
                     ),
-                    account.getAto()
+                    ato
             );
         }
 
@@ -63,20 +66,10 @@ public class ATOContractTest {
             mockCtx.setTxId("123");
             contract.CreateATO(mockCtx, "memo", "artifacts");
 
-            MockEvent mockEvent = mockCtx.getStub().getMockEvent();
-            assertEquals("CreateATO", mockEvent.getName());
-            Account account = SerializationUtils.deserialize(mockEvent.getPayload());
+            MockEvent actual = mockCtx.getStub().getMockEvent();
             assertEquals(
-                    new Account(ORG2_MSP, PENDING, new ATO(
-                            "123",
-                            now.toString(),
-                            now.toString(),
-                            1,
-                            "memo",
-                            "artifacts",
-                            List.of()
-                    ), 1),
-                    account
+                    new MockEvent("CreateATO", SerializationUtils.serialize(new ATOEvent(ORG2_MSP))),
+                    actual
             );
         }
 
@@ -95,9 +88,32 @@ public class ATOContractTest {
             ChaincodeException e = assertThrows(
                     ChaincodeException.class, () -> contract.CreateATO(mockCtx, "memo", "artifacts")
             );
-            assertEquals("account Org3MSP has not yet joined", e.getMessage());
+            assertEquals("account Org3MSP does not exist", e.getMessage());
         }
 
+        @Test
+        void testBlossomAdmin() throws PMException, IOException {
+            MockContext ctx = newTestContext(MockIdentity.ORG1_AO);
+
+            Instant now = Instant.now();
+            ctx.setTxId("123");
+            ctx.setTimestamp(now);
+
+            contract.CreateATO(ctx, "memo", "artifacts");
+            ATO ato = contract.GetATO(ctx, ORG1_MSP);
+            assertEquals(
+                    new ATO(
+                            "123",
+                            now.toString(),
+                            now.toString(),
+                            1,
+                            "memo",
+                            "artifacts",
+                            new ArrayList<>()
+                    ),
+                    ato
+            );
+        }
     }
 
     @Nested
@@ -115,7 +131,7 @@ public class ATOContractTest {
             mockCtx.setTimestamp(now2);
             contract.UpdateATO(mockCtx, "memo2", "artifacts2");
 
-            Account account = new AccountContract().GetAccount(mockCtx, "Org2MSP");
+            ATO actual = contract.GetATO(mockCtx, ORG2_MSP);
             assertEquals(
                     new ATO(
                             "123",
@@ -126,7 +142,7 @@ public class ATOContractTest {
                             "artifacts2",
                             new ArrayList<>()
                     ),
-                    account.getAto()
+                    actual
             );
         }
 
@@ -152,7 +168,7 @@ public class ATOContractTest {
             ChaincodeException e = assertThrows(
                     ChaincodeException.class, () -> contract.CreateATO(mockCtx, "memo", "artifacts")
             );
-            assertEquals("account Org3MSP has not yet joined", e.getMessage());
+            assertEquals("account Org3MSP does not exist", e.getMessage());
         }
 
         @Test
@@ -168,22 +184,53 @@ public class ATOContractTest {
             mockCtx.setTimestamp(now2);
             contract.UpdateATO(mockCtx, "memo2", "artifacts2");
 
-            MockEvent mockEvent = mockCtx.getStub().getMockEvent();
-            assertEquals("UpdateATO", mockEvent.getName());
-            Account account = SerializationUtils.deserialize(mockEvent.getPayload());
+            MockEvent actual = mockCtx.getStub().getMockEvent();
             assertEquals(
-                    new Account(ORG2_MSP, PENDING, new ATO(
-                            "123",
-                            now.toString(),
-                            now2.toString(),
-                            2,
-                            "memo2",
-                            "artifacts2",
-                            List.of()
-                    ), 1),
-                    account
+                    new MockEvent("UpdateATO", SerializationUtils.serialize(new ATOEvent(ORG2_MSP))),
+                    actual
             );
         }
+    }
+
+    @Nested
+    class GetATOTest {
+
+        @Test
+        void testNotYetJoinedCannotGetATO() throws Exception {
+            MockContext ctx = newTestMockContextWithOneAccount(MockIdentity.ORG3_AO);
+            ChaincodeException e = assertThrows(ChaincodeException.class, () -> contract.GetATO(ctx, ORG2_MSP));
+            assertEquals("account Org3MSP does not exist", e.getMessage());
+        }
+
+        @Test
+        void testATONotCreatedYet() throws Exception {
+            MockContext ctx = newTestMockContextWithAccounts(MockIdentity.ORG3_AO);
+            ChaincodeException e = assertThrows(ChaincodeException.class, () -> contract.GetATO(ctx, ORG3_MSP));
+            assertEquals("Org3MSP has not created an ATO yet", e.getMessage());
+        }
+
+        @Test
+        void testSuccess() throws Exception {
+            Instant now = Instant.now();
+            MockContext ctx = newTestMockContextWithAccountsAndATOs(MockIdentity.ORG3_AO, now);
+            updateAccountStatus(ctx, ORG3_MSP, AUTHORIZED);
+            ATO ato = contract.GetATO(ctx, ORG2_MSP);
+            assertEquals(
+                    new ATO(
+                            "123",
+                            now.toString(),
+                            now.toString(),
+                            1,
+                            "memo",
+                            "artifacts",
+                            List.of(
+                                    new Feedback(1, ORG1_MSP, "comment1")
+                            )
+                    ),
+                    ato
+            );
+        }
+
     }
 
     @Nested
@@ -193,8 +240,8 @@ public class ATOContractTest {
         void testSuccess() throws Exception {
             MockContext mockCtx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
 
-            updateAccountStatus(mockCtx, ORG2_MSP, AUTHORIZED.toString());
-            updateAccountStatus(mockCtx, ORG3_MSP, AUTHORIZED.toString());
+            updateAccountStatus(mockCtx, ORG2_MSP, AUTHORIZED);
+            updateAccountStatus(mockCtx, ORG3_MSP, AUTHORIZED);
 
             Instant now = Instant.now();
             mockCtx.setTimestamp(now);
@@ -202,10 +249,10 @@ public class ATOContractTest {
             contract.CreateATO(mockCtx, "memo", "artifacts");
 
             mockCtx.setClientIdentity(MockIdentity.ORG3_AO);
-            contract.SubmitFeedback(mockCtx, "Org2MSP", 1, "comment1");
-            contract.SubmitFeedback(mockCtx, "Org2MSP", 1, "comment2");
+            contract.SubmitFeedback(mockCtx, ORG2_MSP, 1, "comment1");
+            contract.SubmitFeedback(mockCtx, ORG2_MSP, 1, "comment2");
 
-            Account account = new AccountContract().GetAccount(mockCtx, "Org2MSP");
+            ATO actual = contract.GetATO(mockCtx, ORG2_MSP);
             assertEquals(
                     new ATO(
                             "123",
@@ -215,11 +262,11 @@ public class ATOContractTest {
                             "memo",
                             "artifacts",
                             List.of(
-                                    new Feedback(1, "Org3MSP", "comment1"),
-                                    new Feedback(1, "Org3MSP", "comment2")
+                                    new Feedback(1, ORG3_MSP, "comment1"),
+                                    new Feedback(1, ORG3_MSP, "comment2")
                             )
                     ),
-                    account.getAto()
+                    actual
             );
         }
 
@@ -227,8 +274,8 @@ public class ATOContractTest {
         void testEvent() throws Exception {
             MockContext mockCtx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
 
-            updateAccountStatus(mockCtx, ORG2_MSP, AUTHORIZED.toString());
-            updateAccountStatus(mockCtx, ORG3_MSP, AUTHORIZED.toString());
+            updateAccountStatus(mockCtx, ORG2_MSP, AUTHORIZED);
+            updateAccountStatus(mockCtx, ORG3_MSP, AUTHORIZED);
 
             Instant now = Instant.now();
             mockCtx.setTimestamp(now);
@@ -236,26 +283,15 @@ public class ATOContractTest {
             contract.CreateATO(mockCtx, "memo", "artifacts");
 
             mockCtx.setClientIdentity(MockIdentity.ORG3_AO);
-            contract.SubmitFeedback(mockCtx, "Org2MSP", 1, "comment1");
-            contract.SubmitFeedback(mockCtx, "Org2MSP", 1, "comment2");
+            contract.SubmitFeedback(mockCtx, ORG2_MSP, 1, "comment1");
+            contract.SubmitFeedback(mockCtx, ORG2_MSP, 1, "comment2");
 
             MockEvent mockEvent = mockCtx.getStub().getMockEvent();
             assertEquals("SubmitFeedback", mockEvent.getName());
-            Account account = SerializationUtils.deserialize(mockEvent.getPayload());
+            SubmitFeedbackEvent actual = SerializationUtils.deserialize(mockEvent.getPayload());
             assertEquals(
-                    new Account(ORG2_MSP, AUTHORIZED, new ATO(
-                            "123",
-                            now.toString(),
-                            now.toString(),
-                            1,
-                            "memo",
-                            "artifacts",
-                            List.of(
-                                    new Feedback(1, "Org3MSP", "comment1"),
-                                    new Feedback(1, "Org3MSP", "comment2")
-                            )
-                    ), 1),
-                    account
+                    new SubmitFeedbackEvent(ORG2_MSP, ORG3_MSP),
+                    actual
             );
         }
 
@@ -263,8 +299,8 @@ public class ATOContractTest {
         void testCreateATOResetsFeedback() throws Exception {
             MockContext mockCtx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
 
-            updateAccountStatus(mockCtx, ORG2_MSP, AUTHORIZED.toString());
-            updateAccountStatus(mockCtx, ORG3_MSP, AUTHORIZED.toString());
+            updateAccountStatus(mockCtx, ORG2_MSP, AUTHORIZED);
+            updateAccountStatus(mockCtx, ORG3_MSP, AUTHORIZED);
 
             Instant now = Instant.now();
             mockCtx.setTimestamp(now);
@@ -272,10 +308,10 @@ public class ATOContractTest {
             contract.CreateATO(mockCtx, "memo", "artifacts");
 
             mockCtx.setClientIdentity(MockIdentity.ORG3_AO);
-            contract.SubmitFeedback(mockCtx, "Org2MSP", 1, "comment1");
-            contract.SubmitFeedback(mockCtx, "Org2MSP", 1, "comment2");
+            contract.SubmitFeedback(mockCtx, ORG2_MSP, 1, "comment1");
+            contract.SubmitFeedback(mockCtx, ORG2_MSP, 1, "comment2");
 
-            Account account = new AccountContract().GetAccount(mockCtx, "Org2MSP");
+            ATO actual = contract.GetATO(mockCtx, ORG2_MSP);
             assertEquals(
                     new ATO(
                             "123",
@@ -285,11 +321,11 @@ public class ATOContractTest {
                             "memo",
                             "artifacts",
                             List.of(
-                                    new Feedback(1, "Org3MSP", "comment1"),
-                                    new Feedback(1, "Org3MSP", "comment2")
+                                    new Feedback(1, ORG3_MSP, "comment1"),
+                                    new Feedback(1, ORG3_MSP, "comment2")
                             )
                     ),
-                    account.getAto()
+                    actual
             );
 
             mockCtx.setClientIdentity(MockIdentity.ORG2_AO);
@@ -297,7 +333,7 @@ public class ATOContractTest {
             mockCtx.setTimestamp(now);
             mockCtx.setTxId("1234");
             contract.CreateATO(mockCtx, "memo2", "artifacts2");
-            account = new AccountContract().GetAccount(mockCtx, "Org2MSP");
+            actual = contract.GetATO(mockCtx, ORG2_MSP);
             assertEquals(
                     new ATO(
                             "1234",
@@ -308,7 +344,7 @@ public class ATOContractTest {
                             "artifacts2",
                             List.of()
                     ),
-                    account.getAto()
+                    actual
             );
         }
 
@@ -338,9 +374,10 @@ public class ATOContractTest {
             contract.CreateATO(mockCtx, "memo", "artifacts");
 
             mockCtx.setClientIdentity(MockIdentity.ORG3_AO);
+            updateAccountStatus(mockCtx, ORG3_MSP, AUTHORIZED);
             ChaincodeException e =
                     assertThrows(ChaincodeException.class,
-                                                () -> contract.SubmitFeedback(mockCtx, "Org2MSP", 2, "comment1"));
+                                                () -> contract.SubmitFeedback(mockCtx, ORG2_MSP, 2, "comment1"));
             assertEquals("submitting feedback on incorrect ATO version: current version 1, got 2", e.getMessage());
         }
 
@@ -349,19 +386,22 @@ public class ATOContractTest {
             MockContext mockCtx = newTestMockContextWithOneAccount(MockIdentity.ORG3_AO);
             ChaincodeException e = assertThrows(
                     ChaincodeException.class,
-                    () -> contract.SubmitFeedback(mockCtx, "Org2MSP", 1, "comment1")
+                    () -> contract.SubmitFeedback(mockCtx, ORG2_MSP, 1, "comment1")
             );
-            assertEquals("account Org2MSP has not yet created an ATO", e.getMessage());
+            assertEquals("account Org3MSP does not exist", e.getMessage());
         }
 
         @Test
         void testBeforeTargetOrgJoins() throws Exception {
             MockContext mockCtx = newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
+
+            updateAccountStatus(mockCtx, ORG2_MSP, AUTHORIZED);
+
             ChaincodeException e = assertThrows(
                     ChaincodeException.class,
-                    () -> contract.SubmitFeedback(mockCtx, "Org3MSP", 1, "comment1")
+                    () -> contract.SubmitFeedback(mockCtx, ORG3_MSP, 1, "comment1")
             );
-            assertEquals("account Org3MSP has not yet created an ATO", e.getMessage());
+            assertEquals("Org3MSP has not created an ATO yet", e.getMessage());
         }
     }
 }

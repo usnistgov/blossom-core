@@ -20,10 +20,10 @@ public class Vote implements Serializable {
     private String id;
 
     /**
-     * The Fabric MSPID that initiated the vote.
+     * The MSPID that initiated the vote.
      */
     @Property
-    private String initiatingMSPID;
+    private String initiatingAccountId;
 
     /**
      * The target member of the vote.
@@ -64,11 +64,11 @@ public class Vote implements Serializable {
     public Vote() {
     }
 
-    public Vote(@JsonProperty String id, @JsonProperty String initiatingMSPID, @JsonProperty String targetMember,
+    public Vote(@JsonProperty String id, @JsonProperty String initiatingAccountId, @JsonProperty String targetMember,
                 @JsonProperty Status statusChange, @JsonProperty String reason, @JsonProperty Threshold threshold,
                 @JsonProperty int count, @JsonProperty Result result) {
         this.id = id;
-        this.initiatingMSPID = initiatingMSPID;
+        this.initiatingAccountId = initiatingAccountId;
         this.targetMember = targetMember;
         this.statusChange = statusChange;
         this.reason = reason;
@@ -85,12 +85,12 @@ public class Vote implements Serializable {
         this.id = id;
     }
 
-    public String getInitiatingMSPID() {
-        return initiatingMSPID;
+    public String getInitiatingAccountId() {
+        return initiatingAccountId;
     }
 
-    public void setInitiatingMSPID(String initiatingMSPID) {
-        this.initiatingMSPID = initiatingMSPID;
+    public void setInitiatingAccountId(String initiatingAccountId) {
+        this.initiatingAccountId = initiatingAccountId;
     }
 
     public String getTargetMember() {
@@ -159,19 +159,19 @@ public class Vote implements Serializable {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         Vote vote = (Vote) o;
-        return count == vote.count && Objects.equals(id, vote.id) && Objects.equals(initiatingMSPID, vote.initiatingMSPID) && Objects.equals(targetMember, vote.targetMember) && statusChange == vote.statusChange && Objects.equals(reason, vote.reason) && threshold == vote.threshold && result == vote.result;
+        return count == vote.count && Objects.equals(id, vote.id) && Objects.equals(initiatingAccountId, vote.initiatingAccountId) && Objects.equals(targetMember, vote.targetMember) && statusChange == vote.statusChange && Objects.equals(reason, vote.reason) && threshold == vote.threshold && result == vote.result;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, initiatingMSPID, targetMember, statusChange, reason, threshold, count, result);
+        return Objects.hash(id, initiatingAccountId, targetMember, statusChange, reason, threshold, count, result);
     }
 
     @Override
     public String toString() {
         return "Vote{" +
                 "id='" + id + '\'' +
-                ", initiatingMSPID='" + initiatingMSPID + '\'' +
+                ", initiatingMSPID='" + initiatingAccountId + '\'' +
                 ", targetMember='" + targetMember + '\'' +
                 ", statusChange=" + statusChange +
                 ", reason='" + reason + '\'' +

@@ -1,5 +1,6 @@
 package contract;
 
+import contract.event.SignMOUEvent;
 import gov.nist.csd.pm.policy.exceptions.PMException;
 import model.Account;
 import model.MOU;
@@ -57,12 +58,8 @@ public class MOUContract implements ContractInterface {
      * @throws ChaincodeException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
      */
     @Transaction
-    public void UpdateMOU(Context ctx, String text) {
-        try {
-            pdp.updateMOU(ctx);
-        } catch (PMException e) {
-            throw new ChaincodeException(e);
-        }
+    public void UpdateMOU(Context ctx, String text) throws PMException {
+        pdp.updateMOU(ctx);
 
         String timestamp = ctx.getStub().getTxTimestamp().toString();
 
@@ -80,7 +77,8 @@ public class MOUContract implements ContractInterface {
         bytes = SerializationUtils.serialize(mou);
 
         ctx.getStub().putState(MOU_KEY, bytes);
-        ctx.getStub().setEvent("UpdateMOU", bytes);
+
+        ctx.getStub().setEvent("UpdateMOU", new byte[]{});
     }
 
     /**
@@ -134,11 +132,7 @@ public class MOUContract implements ContractInterface {
      */
     @Transaction
     public void SignMOU(Context ctx, int version) {
-        try {
-            pdp.signMOU(ctx);
-        } catch (PMException e) {
-            throw new ChaincodeException(e);
-        }
+        pdp.signMOU(ctx);
 
         MOU mou = GetMOU(ctx);
 
@@ -146,13 +140,13 @@ public class MOUContract implements ContractInterface {
             throw new ChaincodeException("signing MOU version " + version + ", expected version " + mou.getVersion());
         }
 
-        String mspid = ctx.getClientIdentity().getMSPID();
+        String accountId = ctx.getClientIdentity().getMSPID();
 
         // check that account exists, if not create it
         Account account;
-        byte[] bytes = ctx.getStub().getState(accountKey(mspid));
+        byte[] bytes = ctx.getStub().getState(accountKey(accountId));
         if (bytes == null) {
-            account = new Account(mspid, null, null, version);
+            account = new Account(accountId, Status.PENDING, version, false);
         } else {
             account = SerializationUtils.deserialize(bytes);
         }
@@ -162,51 +156,6 @@ public class MOUContract implements ContractInterface {
         bytes = SerializationUtils.serialize(account);
         ctx.getStub().putState(accountKey(ctx.getClientIdentity().getMSPID()), bytes);
 
-        ctx.getStub().setEvent("SignMOU", bytes);
+        ctx.getStub().setEvent("SignMOU", SerializationUtils.serialize(new SignMOUEvent(accountId, version)));
     }
-
-    /**
-     * Join represents the final step in joining the network. Calling this function will set the member's account status
-     * to PENDING and they will be able to start the ATO process and voting. The member must have already signed the MOU
-     * before joining.
-     *
-     * event:
-     *  - name: "Join"
-     *  - payload: a serialized Account object
-     *
-     * @param ctx Fabric context object.
-     * @throws ChaincodeException If the cid MSPID has not signed the MOU first.
-     * @throws ChaincodeException If the cid MSPID has already joined.
-     * @throws ChaincodeException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
-     */
-    @Transaction
-    public void Join(Context ctx) {
-        String mspid = ctx.getClientIdentity().getMSPID();
-
-        Account account;
-        try {
-            account = new AccountContract().GetAccount(ctx, mspid);
-        } catch (ChaincodeException e) {
-            throw new ChaincodeException(mspid + " must sign the current MOU before joining");
-        }
-
-        if (account.getStatus() != null) {
-            throw new ChaincodeException(mspid + " is already joined");
-        }
-
-        try {
-            pdp.join(ctx, mspid);
-        } catch (PMException e) {
-            throw new ChaincodeException(e);
-        }
-
-        // update the account status to PENDING, which is the initial status after approval
-        account.setStatus(Status.PENDING);
-
-        // update the account
-        byte[] bytes = SerializationUtils.serialize(account);
-        ctx.getStub().putState(accountKey(mspid), bytes);
-        ctx.getStub().setEvent("Join", bytes);
-    }
-
 }

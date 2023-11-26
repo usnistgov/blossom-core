@@ -1,5 +1,6 @@
 package contract;
 
+import contract.event.SignMOUEvent;
 import gov.nist.csd.pm.policy.exceptions.PMException;
 import gov.nist.csd.pm.policy.exceptions.UnauthorizedException;
 import mock.MockContext;
@@ -47,10 +48,10 @@ class MOUContractTest {
         void testUnauthorized() throws PMException, IOException {
             MockContext mockCtx = MockContextUtil.newTestContext(MockIdentity.ORG1_AO);
 
-            updateAccountStatus(mockCtx, "Org1MSP", PENDING.toString());
+            updateAccountStatus(mockCtx, "Org1MSP", PENDING);
             assertThrows(ChaincodeException.class, () -> contract.UpdateMOU(mockCtx, "test mou"));
 
-            updateAccountStatus(mockCtx, "Org1MSP", AUTHORIZED.toString());
+            updateAccountStatus(mockCtx, "Org1MSP", AUTHORIZED);
             assertDoesNotThrow(() -> contract.UpdateMOU(mockCtx, "test mou"));
         }
 
@@ -65,12 +66,7 @@ class MOUContractTest {
 
             MockEvent mockEvent = mockCtx.getStub().getMockEvent();
             assertEquals("UpdateMOU", mockEvent.getName());
-            MOU mou = SerializationUtils.deserialize(mockEvent.getPayload());
-
-            assertEquals(
-                    new MOU("test mou", 2, now.toString()),
-                    mou
-            );
+            assertEquals(0, mockEvent.getPayload().length);
         }
     }
 
@@ -90,7 +86,7 @@ class MOUContractTest {
             MockContext mockContext = new MockContext(MockIdentity.ORG1_AO);
             BootstrapContract bootstrapContract = new BootstrapContract();
             mockContext.setTimestamp(Instant.now());
-            bootstrapContract.Bootstrap(mockContext, "org1 test ato", "org1 artifacts");
+            bootstrapContract.Bootstrap(mockContext);
 
             ChaincodeException e = assertThrows(ChaincodeException.class,
                                                 () -> contract.GetMOU(mockContext));
@@ -167,7 +163,7 @@ class MOUContractTest {
 
             BootstrapContract bootstrapContract = new BootstrapContract();
             mockContext.setTimestamp(Instant.now());
-            bootstrapContract.Bootstrap(mockContext, "org1 test ato", "org1 artifacts");
+            bootstrapContract.Bootstrap(mockContext);
 
             ChaincodeException e = assertThrows(ChaincodeException.class, () -> contract.SignMOU(mockContext, 0));
             assertEquals("Blossom MOU has not yet been created", e.getMessage());
@@ -176,7 +172,7 @@ class MOUContractTest {
         @Test
         void testSignMOUWhenPending() throws Exception {
             MockContext mockCtx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
-            updateAccountStatus(mockCtx, "Org2MSP", PENDING.toString());
+            updateAccountStatus(mockCtx, "Org2MSP", PENDING);
 
             mockCtx.setClientIdentity(MockIdentity.ORG1_AO);
             contract.UpdateMOU(mockCtx, "updated mou");
@@ -192,60 +188,8 @@ class MOUContractTest {
 
             MockEvent mockEvent = mockCtx.getStub().getMockEvent();
             assertEquals("SignMOU", mockEvent.getName());
-            Account account = SerializationUtils.deserialize(mockEvent.getPayload());
-            assertEquals(new Account(
-                    ORG2_MSP,
-                    null,
-                    null,
-                    1
-            ), account);
-        }
-    }
-
-    @Nested
-    class JoinTest {
-
-        @Test
-        void testSuccess() throws PMException, IOException {
-            MockContext mockCtx = MockContextUtil.newTestContext(MockIdentity.ORG2_AO);
-            contract.SignMOU(mockCtx, 1);
-            contract.Join(mockCtx);
-
-            Account account = new AccountContract().GetAccount(mockCtx, "Org2MSP");
-            assertEquals(PENDING, account.getStatus());
-        }
-
-        @Test
-        void testAlreadyJoined() throws PMException, IOException {
-            MockContext mockCtx = MockContextUtil.newTestContext(MockIdentity.ORG2_AO);
-            contract.SignMOU(mockCtx, 1);
-            contract.Join(mockCtx);
-            ChaincodeException e = assertThrows(ChaincodeException.class, () -> contract.Join(mockCtx));
-            assertEquals("Org2MSP is already joined", e.getMessage());
-        }
-
-        @Test
-        void testNotSignedMOU() throws PMException, IOException {
-            MockContext mockCtx = MockContextUtil.newTestContext(MockIdentity.ORG2_AO);
-            ChaincodeException e = assertThrows(ChaincodeException.class, () -> contract.Join(mockCtx));
-            assertEquals("Org2MSP must sign the current MOU before joining", e.getMessage());
-        }
-
-        @Test
-        void testEvent() throws PMException, IOException {
-            MockContext mockCtx = MockContextUtil.newTestContext(MockIdentity.ORG2_AO);
-            contract.SignMOU(mockCtx, 1);
-            contract.Join(mockCtx);
-
-            MockEvent mockEvent = mockCtx.getStub().getMockEvent();
-            assertEquals("Join", mockEvent.getName());
-            Account account = SerializationUtils.deserialize(mockEvent.getPayload());
-            assertEquals(new Account(
-                    ORG2_MSP,
-                    PENDING,
-                    null,
-                    1
-            ), account);
+            SignMOUEvent event = SerializationUtils.deserialize(mockEvent.getPayload());
+            assertEquals(new SignMOUEvent(ORG2_MSP, 1), event);
         }
     }
 }

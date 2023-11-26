@@ -1,8 +1,10 @@
 package contract;
 
+import gov.nist.csd.pm.policy.exceptions.PMException;
 import model.Account;
 import model.AccountHistorySnapshot;
 import model.Status;
+import ngac.BlossomPDP;
 import org.apache.commons.lang3.SerializationUtils;
 import org.hyperledger.fabric.contract.Context;
 import org.hyperledger.fabric.contract.ContractInterface;
@@ -40,8 +42,48 @@ public class AccountContract implements ContractInterface {
     /**
      * builds the key for writing the account to the ledger
      */
-    public static String accountKey(String mspid) {
-        return ACCOUNT_PREFIX + mspid;
+    public static String accountKey(String accountId) {
+        return ACCOUNT_PREFIX + accountId;
+    }
+
+    public static String accountImplicitDataCollection(String accountId) {
+        return "_implicit_org_" + accountId;
+    }
+
+    private BlossomPDP pdp = new BlossomPDP();
+
+    /**
+     * Join represents the final step in joining the network. Calling this function will set the member's account status
+     * to PENDING and they will be able to start the ATO process and voting. The member must have already signed the MOU
+     * before joining.
+     *
+     * event:
+     *  - name: "Join"
+     *  - payload: a serialized Account object
+     *
+     * @param ctx Fabric context object.
+     * @throws ChaincodeException If the cid MSPID has not signed the MOU first.
+     * @throws ChaincodeException If the cid MSPID has already joined.
+     * @throws ChaincodeException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
+     */
+    @Transaction
+    public void Join(Context ctx) {
+        String accountId = ctx.getClientIdentity().getMSPID();
+
+        pdp.join(ctx, accountId);
+
+        Account account = new AccountContract().GetAccount(ctx, accountId);
+        if (account.isJoined()) {
+            throw new ChaincodeException(accountId + " has already joined");
+        }
+
+        account.setJoined(true);
+
+        // update the account
+        byte[] bytes = SerializationUtils.serialize(account);
+        ctx.getStub().putState(accountKey(accountId), bytes);
+
+        ctx.getStub().setEvent("Join", new byte[]{});
     }
 
     /**
@@ -51,7 +93,6 @@ public class AccountContract implements ContractInterface {
      *
      * @param ctx Fabric context object.
      * @return A list of Accounts.
-     * @throws ChaincodeException if an error occurs iterating through accounts on the ledger.
      */
     @Transaction
     public List<Account> GetAccounts(Context ctx) {
@@ -75,15 +116,15 @@ public class AccountContract implements ContractInterface {
      * NGAC: none.
      *
      * @param ctx Fabric context object.
-     * @param mspid The account to return.
+     * @param accountId The account to return.
      * @return The account information of the account with the given MSPID.
      * @throws ChaincodeException if an account with the given MSPID does not exist.
      */
     @Transaction
-    public Account GetAccount(Context ctx, String mspid) {
-        byte[] bytes = ctx.getStub().getState(accountKey(mspid));
+    public Account GetAccount(Context ctx, String accountId) {
+        byte[] bytes = ctx.getStub().getState(accountKey(accountId));
         if (bytes == null) {
-            throw new ChaincodeException("an account with id " + mspid + " does not exist");
+            throw new ChaincodeException("an account with id " + accountId + " does not exist");
         }
 
         return SerializationUtils.deserialize(bytes);
@@ -100,8 +141,8 @@ public class AccountContract implements ContractInterface {
      */
     @Transaction
     public Status GetAccountStatus(Context ctx) {
-        String mspid = ctx.getClientIdentity().getMSPID();
-        Account account = GetAccount(ctx, mspid);
+        String accountId = ctx.getClientIdentity().getMSPID();
+        Account account = GetAccount(ctx, accountId);
 
         return account.getStatus();
     }
@@ -113,13 +154,13 @@ public class AccountContract implements ContractInterface {
      * NGAC: none.
      *
      * @param ctx Fabric context object.
-     * @param mspid The MSPID of the account to get the history for.
+     * @param accountId The MSPID of the account to get the history for.
      * @return A list of HistorySnapshots containing the history of the given account.
      */
     @Transaction
-    public List<AccountHistorySnapshot> GetAccountHistory(Context ctx, String mspid) {
+    public List<AccountHistorySnapshot> GetAccountHistory(Context ctx, String accountId) {
         List<AccountHistorySnapshot> accountHistorySnapshots = new ArrayList<>();
-        QueryResultsIterator<KeyModification> historyForKey = ctx.getStub().getHistoryForKey(accountKey(mspid));
+        QueryResultsIterator<KeyModification> historyForKey = ctx.getStub().getHistoryForKey(accountKey(accountId));
         for (KeyModification next : historyForKey) {
             String txID = next.getTxId();
             Instant timestamp = next.getTimestamp();

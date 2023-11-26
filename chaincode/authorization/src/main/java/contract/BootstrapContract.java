@@ -41,11 +41,6 @@ public class BootstrapContract implements ContractInterface {
             true, true, true, false
     );
 
-    @Transaction
-    public String Get(Context ctx, String key) {
-        return new String(ctx.getStub().getState(key));
-    }
-
     /**
      * Bootstrap the Blossom authorization chaincode by initializing the NGAC policy. The account identified by the ADMINMSP
      * constant in the policy.pml file will automatically be set to AUTHORIZED. Once additional members are added to the
@@ -55,13 +50,12 @@ public class BootstrapContract implements ContractInterface {
      * NGAC: Only an Authorizing Official from the Blossom Admin member can call this function.
      *
      * @param ctx Chaincode context which stores the requesting CID and exposes world state functions.
-     * @param ato The ATO for the Blossom Admin member account.
      * @throws ChaincodeException If the Bootstrap method has already been called.
      * @throws ChaincodeException If there is an error building the initial NGAC policy configuration.
      * @throws ChaincodeException If there is an error reading the policy file.
      */
     @Transaction()
-    public void Bootstrap(Context ctx, String ato, String artifacts) {
+    public void Bootstrap(Context ctx) {
         // check if this has been called already by checking if the policy has already been created
         byte[] policyBytes = ctx.getStub().getState("policy");
         if (policyBytes != null && policyBytes.length > 0) {
@@ -92,7 +86,7 @@ public class BootstrapContract implements ContractInterface {
 
         // put admin member account on ledger
         String mspid = ctx.getClientIdentity().getMSPID();
-        Account account = new Account(mspid, Status.AUTHORIZED, ATO.createFromContext(ctx, ato, artifacts), 0);
+        Account account = new Account(mspid, Status.AUTHORIZED, 0, true);
         ctx.getStub().putState(accountKey(mspid), SerializationUtils.serialize(account));
 
         // put default vote configuration on ledger

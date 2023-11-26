@@ -66,7 +66,7 @@ class VoteContractTest {
         @Test
         void testBlossomAdminAccountUnauthorized() throws Exception {
             MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
-            updateAccountStatus(ctx, "Org1MSP", PENDING.toString());
+            updateAccountStatus(ctx, "Org1MSP", PENDING);
             assertThrows(ChaincodeException.class,
                          () -> voteContract.UpdateVoteConfiguration(ctx, new VoteConfiguration(false, false, false, false)));
         }
@@ -101,9 +101,9 @@ class VoteContractTest {
             MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
             ctx.setTimestamp(Instant.now());
             ctx.setTxId(Instant.now().toString());
-            updateAccountStatus(ctx, ORG2_MSP, Status.AUTHORIZED.name());
-            voteContract.InitiateVote(ctx, ORG3_MSP, Status.UNAUTHORIZED.name(), "reason");
-            assertThrows(ChaincodeException.class, () -> voteContract.InitiateVote(ctx, ORG3_MSP, Status.UNAUTHORIZED.name(), "reason"));
+            updateAccountStatus(ctx, ORG2_MSP, Status.AUTHORIZED);
+            voteContract.InitiateVote(ctx, ORG3_MSP, Status.UNAUTHORIZED.toString(), "reason");
+            assertThrows(ChaincodeException.class, () -> voteContract.InitiateVote(ctx, ORG3_MSP, Status.UNAUTHORIZED.toString(), "reason"));
 
         }
 
@@ -449,7 +449,7 @@ class VoteContractTest {
         void testGetUnknownVote() throws Exception {
             MockContext ctx = initializeCtx();
 
-            String id = initiateTestVote(ctx, ORG3_MSP);
+            initiateTestVote(ctx, ORG3_MSP);
 
             assertThrows(VoteContract.VoteDoesNotExistException.class, () -> voteContract.GetVote(ctx, "unknown", ORG3_MSP));
         }
@@ -491,7 +491,7 @@ class VoteContractTest {
             ), vote);
 
             // get vote with super
-            voteContract.InitiateVote(ctx, ORG1_MSP, Status.UNAUTHORIZED.name(), "reason");
+            voteContract.InitiateVote(ctx, ORG1_MSP, Status.UNAUTHORIZED.toString(), "reason");
             id = voteContract.GetOngoingVoteForMember(ctx, ORG1_MSP).getId();
             vote = voteContract.GetVote(ctx, id, ORG1_MSP);
             assertEquals(new Vote(
@@ -511,7 +511,7 @@ class VoteContractTest {
             String id = initiateTestVote(ctx, ORG3_MSP);
 
             // create another test vote
-            voteContract.InitiateVote(ctx, ORG1_MSP, Status.UNAUTHORIZED.name(), "reason");
+            voteContract.InitiateVote(ctx, ORG1_MSP, Status.UNAUTHORIZED.toString(), "reason");
 
             Vote vote = voteContract.GetOngoingVoteForMember(ctx, ORG1_MSP);
             String id2 = vote.getId();
@@ -537,7 +537,7 @@ class VoteContractTest {
             String id = initiateTestVote(ctx, ORG3_MSP);
 
             // create another test vote
-            voteContract.InitiateVote(ctx, ORG1_MSP, Status.UNAUTHORIZED.name(), "reason");
+            voteContract.InitiateVote(ctx, ORG1_MSP, Status.UNAUTHORIZED.toString(), "reason");
             Vote vote = voteContract.GetOngoingVoteForMember(ctx, ORG1_MSP);
             String id2 = vote.getId();
 
@@ -569,7 +569,7 @@ class VoteContractTest {
             String id = initiateTestVote(ctx, ORG3_MSP);
 
             // create another test vote
-            voteContract.InitiateVote(ctx, ORG1_MSP, Status.UNAUTHORIZED.name(), "reason");
+            voteContract.InitiateVote(ctx, ORG1_MSP, Status.UNAUTHORIZED.toString(), "reason");
 
             List<Vote> votes = voteContract.GetVotesForMember(ctx, ORG3_MSP);
             assertEquals(1, votes.size());
@@ -701,8 +701,8 @@ class VoteContractTest {
     private MockContext initializeCtx() throws Exception {
         MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
 
-        updateAccountStatus(ctx, ORG2_MSP, Status.AUTHORIZED.name());
-        updateAccountStatus(ctx, ORG3_MSP, Status.AUTHORIZED.name());
+        updateAccountStatus(ctx, ORG2_MSP, Status.AUTHORIZED);
+        updateAccountStatus(ctx, ORG3_MSP, Status.AUTHORIZED);
 
         voteContract.UpdateVoteConfiguration(ctx, new VoteConfiguration(true, true, true, false));
 
@@ -713,7 +713,7 @@ class VoteContractTest {
     private String initiateTestVote(MockContext ctx, String targetMember) throws Exception {
         ctx.setClientIdentity(MockIdentity.ORG2_AO);
         ctx.setTxId("123");
-        voteContract.InitiateVote(ctx, targetMember, Status.UNAUTHORIZED.name(), "reason");
+        voteContract.InitiateVote(ctx, targetMember, Status.UNAUTHORIZED.toString(), "reason");
 
         Vote vote = voteContract.GetOngoingVoteForMember(ctx, targetMember);
         return vote.getId();

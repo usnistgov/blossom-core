@@ -1,27 +1,46 @@
 package ngac;
 
 import contract.VoteContract;
-import gov.nist.csd.pm.policy.exceptions.NodeDoesNotExistException;
+import gov.nist.csd.pm.pap.PAP;
+import gov.nist.csd.pm.pap.memory.MemoryPolicyStore;
 import gov.nist.csd.pm.policy.exceptions.PMException;
-import gov.nist.csd.pm.policy.exceptions.UnauthorizedException;
+import gov.nist.csd.pm.policy.model.access.UserContext;
+import gov.nist.csd.pm.policy.pml.value.StringValue;
+import gov.nist.csd.pm.policy.serialization.json.JSONSerializer;
 import mock.MockContext;
 import mock.MockIdentity;
+import model.Status;
 import model.VoteConfiguration;
 import org.hyperledger.fabric.shim.ChaincodeException;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 
 import static contract.MockContextUtil.*;
 import static mock.MockOrgs.*;
 import static model.Status.AUTHORIZED;
 import static model.Status.PENDING;
+import static ngac.BlossomPDP.getUserCtxFromRequest;
+import static ngac.BlossomPDP.loadPolicy;
 import static org.junit.jupiter.api.Assertions.*;
 
 class BlossomPDPTest {
 
     BlossomPDP pdp = new BlossomPDP();
+
+    private static void updateAccountStatus(MockContext ctx, String mspid, Status status) throws PMException {
+        MemoryPolicyStore memoryPolicyStore = loadPolicy(ctx, getUserCtxFromRequest(ctx));
+
+        PAP pap = new PAP(memoryPolicyStore);
+        pap.executePMLFunction(new UserContext("blossom admin"), "updateAccountStatus",
+                               new StringValue(mspid), new StringValue(status.toString())
+        );
+
+        ctx.getStub().putState("policy", memoryPolicyStore.serialize(new JSONSerializer()).getBytes(StandardCharsets.UTF_8));
+    }
 
     @Test
     void testGetAdminMSPID() throws Exception {
@@ -41,7 +60,8 @@ class BlossomPDPTest {
         @Test
         void testUnauthorized() throws Exception {
             MockContext ctx = newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
-            assertThrows(UnauthorizedException.class, () -> pdp.updateMOU(ctx));
+            ChaincodeException e = assertThrows(ChaincodeException.class, () -> pdp.updateMOU(ctx));
+            assertEquals("cid is not authorized to update the Blossom MOU", e.getMessage());
         }
     }
 
@@ -56,16 +76,24 @@ class BlossomPDPTest {
         @Test
         void testUnauthorizedAsAdminAndPending() throws Exception {
             MockContext ctx = newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
-            updateAccountStatus(ctx, ORG1_MSP, PENDING.toString());
-            assertThrows(UnauthorizedException.class, () -> pdp.updateVoteConfig(ctx, new VoteConfiguration(false, false, false, false)));
-            updateAccountStatus(ctx, ORG1_MSP, AUTHORIZED.toString());
+            updateAccountStatus(ctx, ORG1_MSP, PENDING);
+            ChaincodeException e = assertThrows(
+                    ChaincodeException.class,
+                    () -> pdp.updateVoteConfig(ctx, new VoteConfiguration(false, false, false, false))
+            );
+            assertEquals("cid is not authorized to update the vote config", e.getMessage());
+            updateAccountStatus(ctx, ORG1_MSP, AUTHORIZED);
             assertDoesNotThrow(() -> pdp.updateVoteConfig(ctx, new VoteConfiguration(false, false, false, false)));
         }
 
         @Test
         void testUnauthorized() throws Exception {
             MockContext ctx = newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
-            assertThrows(UnauthorizedException.class, () -> pdp.updateVoteConfig(ctx, new VoteConfiguration(false, false, false, false)));
+            ChaincodeException e = assertThrows(
+                    ChaincodeException.class,
+                    () -> pdp.updateVoteConfig(ctx, new VoteConfiguration(false, false, false, false))
+            );
+            assertEquals("cid is not authorized to update the vote config", e.getMessage());
         }
     }
 
@@ -80,8 +108,15 @@ class BlossomPDPTest {
         @Test
         void testUnauthorized() throws Exception {
             MockContext ctx = newTestMockContextWithAccounts(MockIdentity.ORG2_NON_AO);
-            PMException e = assertThrows(PMException.class, () -> pdp.signMOU(ctx));
+            ChaincodeException e = assertThrows(ChaincodeException.class, () -> pdp.signMOU(ctx));
             assertEquals("unknown user role: System Administrator", e.getMessage());
+        }
+
+        @Test
+        void testSignAgainDoesNotThrowException() throws Exception {
+            MockContext ctx = newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
+            pdp.signMOU(ctx);
+            assertDoesNotThrow(() -> pdp.signMOU(ctx));
         }
     }
 
@@ -90,14 +125,54 @@ class BlossomPDPTest {
         @Test
         void testAuthorized() throws Exception {
             MockContext ctx = newTestContext(MockIdentity.ORG2_AO);
-            assertDoesNotThrow(() -> pdp.join(ctx, ORG2_MSP));
+            pdp.signMOU(ctx);
+            ChaincodeException e = assertThrows(ChaincodeException.class, () -> pdp.join(ctx, ORG2_MSP));
+            assertEquals(
+                    "cid is not authorized to join for account Org2MSP",
+                    e.getMessage()
+            );
+
+            updateAccountStatus(ctx, ORG2_MSP, AUTHORIZED);
+
+            assertDoesNotThrow(() -> pdp.signMOU(ctx));
         }
 
         @Test
         void testUnauthorized() throws Exception {
-            MockContext ctx = newTestMockContextWithAccounts(MockIdentity.ORG2_NON_AO);
-            PMException e = assertThrows(PMException.class, () -> pdp.join(ctx, ORG2_MSP));
-            assertEquals("unknown user role: System Administrator", e.getMessage());
+            MockContext ctx = newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
+            updateAccountStatus(ctx, ORG2_MSP, PENDING);
+            ChaincodeException e = assertThrows(ChaincodeException.class, () -> pdp.join(ctx, ORG2_MSP));
+            assertEquals("cid is not authorized to join for account Org2MSP", e.getMessage());
+        }
+    }
+
+    @Nested
+    class ReadATOTest {
+        @Test
+        void testPendingReadOwn() throws Exception {
+            MockContext ctx = newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
+            updateAccountStatus(ctx, ORG2_MSP, PENDING);
+            assertDoesNotThrow(() -> pdp.readATO(ctx, ORG2_MSP));
+        }
+        @Test
+        void testPendingCannotReadOther() throws Exception {
+            MockContext ctx = newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
+            updateAccountStatus(ctx, ORG2_MSP, PENDING);
+            ChaincodeException e = assertThrows(ChaincodeException.class, () -> pdp.readATO(ctx, ORG3_MSP));
+            assertEquals(
+                    "cid is not authorized to read the ATO of account Org3MSP",
+                    e.getMessage()
+            );
+        }
+        @Test
+        void testAuthorizedCanReadOther() throws Exception {
+            MockContext ctx = newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
+            assertDoesNotThrow(() -> pdp.readATO(ctx, ORG3_MSP));
+        }
+        @Test
+        void testAuthorizedCanReadOwn() throws Exception {
+            MockContext ctx = newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
+            assertDoesNotThrow(() -> pdp.readATO(ctx, ORG2_MSP));
         }
     }
 
@@ -112,20 +187,20 @@ class BlossomPDPTest {
         @Test
         void testUnauthorizedOnAnotherMember() throws Exception {
             MockContext ctx = newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
-            assertThrows(UnauthorizedException.class, () -> pdp.writeATO(ctx, ORG3_MSP));
+            assertThrows(ChaincodeException.class, () -> pdp.writeATO(ctx, ORG3_MSP));
         }
 
         @Test
         void testAuthorizedWhenPending() throws Exception {
             MockContext ctx = newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
-            updateAccountStatus(ctx, ORG2_MSP, PENDING.toString());
+            updateAccountStatus(ctx, ORG2_MSP, PENDING);
             assertDoesNotThrow(() -> pdp.writeATO(ctx, ORG2_MSP));
         }
 
         @Test
         void testOrg1AuthorizedWhenPending() throws Exception {
             MockContext ctx = newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
-            updateAccountStatus(ctx, ORG1_MSP, PENDING.toString());
+            updateAccountStatus(ctx, ORG1_MSP, PENDING);
             assertDoesNotThrow(() -> pdp.writeATO(ctx, ORG1_MSP));
         }
     }
@@ -136,7 +211,7 @@ class BlossomPDPTest {
         void testAuthorized() throws Exception {
             Instant now = Instant.now();
             MockContext ctx = newTestMockContextWithAccountsAndATOs(MockIdentity.ORG2_AO, now);
-            updateAccountStatus(ctx, ORG2_MSP, AUTHORIZED.toString());
+            updateAccountStatus(ctx, ORG2_MSP, AUTHORIZED);
 
             assertDoesNotThrow(() -> pdp.submitFeedback(ctx, ORG3_MSP));
         }
@@ -144,16 +219,16 @@ class BlossomPDPTest {
         void testUnauthorized() throws Exception {
             Instant now = Instant.now();
             MockContext ctx = newTestMockContextWithAccountsAndATOs(MockIdentity.ORG2_AO, now);
-            updateAccountStatus(ctx, ORG2_MSP, PENDING.toString());
+            updateAccountStatus(ctx, ORG2_MSP, PENDING);
 
-            assertThrows(UnauthorizedException.class, () -> pdp.submitFeedback(ctx, ORG3_MSP));
+            assertThrows(ChaincodeException.class, () -> pdp.submitFeedback(ctx, ORG3_MSP));
         }
 
         @Test
         void testFeedbackOnSelf() throws Exception {
             Instant now = Instant.now();
             MockContext ctx = newTestMockContextWithAccountsAndATOs(MockIdentity.ORG2_AO, now);
-            updateAccountStatus(ctx, ORG2_MSP, PENDING.toString());
+            updateAccountStatus(ctx, ORG2_MSP, PENDING);
 
             assertDoesNotThrow(() -> pdp.submitFeedback(ctx, ORG2_MSP));
         }
@@ -165,24 +240,30 @@ class BlossomPDPTest {
         @Test
         void testUnauthorized() throws Exception {
             MockContext ctx = newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
-            assertThrows(UnauthorizedException.class, () -> pdp.initiateVote(ctx, "123", ORG3_MSP));
-            updateAccountStatus(ctx, ORG2_MSP, AUTHORIZED.toString());
+            updateAccountStatus(ctx, ORG2_MSP, PENDING);
+            ChaincodeException e = assertThrows(
+                    ChaincodeException.class,
+                    () -> pdp.initiateVote(ctx, "123", ORG3_MSP)
+            );
+            assertEquals("cid is not authorized to initiate a vote on Org3MSP", e.getMessage());
+            updateAccountStatus(ctx, ORG2_MSP, AUTHORIZED);
             assertDoesNotThrow(() -> pdp.initiateVote(ctx, "123", ORG2_MSP));
-            updateAccountStatus(ctx, ORG2_MSP, PENDING.toString());
-            assertThrows(UnauthorizedException.class, () -> pdp.initiateVote(ctx, "123", ORG1_MSP));
+            updateAccountStatus(ctx, ORG2_MSP, PENDING);
+            e = assertThrows(ChaincodeException.class, () -> pdp.initiateVote(ctx, "123", ORG1_MSP));
+            assertEquals("cid is not authorized to initiate a vote on Org1MSP", e.getMessage());
         }
 
         @Test
         void testAuthorizedOnSelf() throws Exception {
             MockContext ctx = newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
-            updateAccountStatus(ctx, ORG2_MSP, AUTHORIZED.toString());
+            updateAccountStatus(ctx, ORG2_MSP, AUTHORIZED);
             assertDoesNotThrow(() -> pdp.initiateVote(ctx, "123", ORG2_MSP));
         }
 
         @Test
         void testAuthorizedOnOther() throws Exception {
             MockContext ctx = newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
-            updateAccountStatus(ctx, ORG2_MSP, AUTHORIZED.toString());
+            updateAccountStatus(ctx, ORG2_MSP, AUTHORIZED);
             assertDoesNotThrow(() -> pdp.initiateVote(ctx, "123", ORG3_MSP));
         }
     }
@@ -203,7 +284,12 @@ class BlossomPDPTest {
             pdp.initiateVote(ctx, "123", ORG2_MSP);
 
             ctx.setClientIdentity(MockIdentity.ORG2_AO);
-            assertThrows(UnauthorizedException.class, () -> pdp.certifyVote(ctx, "123", ORG2_MSP));
+            updateAccountStatus(ctx, ORG2_MSP, PENDING);
+            ChaincodeException e = assertThrows(
+                    ChaincodeException.class,
+                    () -> pdp.certifyVote(ctx, "123", ORG2_MSP)
+            );
+            assertEquals("cid is not authorized to certify a vote on Org2MSP", e.getMessage());
         }
 
         @Test
@@ -221,8 +307,12 @@ class BlossomPDPTest {
             pdp.initiateVote(ctx, "123", ORG2_MSP);
 
             ctx.setClientIdentity(MockIdentity.ORG1_AO);
-            updateAccountStatus(ctx, ORG1_MSP, PENDING.toString());
-            assertThrows(UnauthorizedException.class, () -> pdp.certifyVote(ctx, "123", ORG2_MSP));
+            updateAccountStatus(ctx, ORG1_MSP, PENDING);
+            ChaincodeException e = assertThrows(
+                    ChaincodeException.class,
+                    () -> pdp.certifyVote(ctx, "123", ORG2_MSP)
+            );
+            assertEquals("cid is not authorized to certify a vote on Org2MSP", e.getMessage());
         }
 
         @Test
@@ -233,7 +323,7 @@ class BlossomPDPTest {
             new VoteContract().UpdateVoteConfiguration(ctx, new VoteConfiguration(true, true, true, true));
 
             ctx.setClientIdentity(MockIdentity.ORG1_AO);
-            updateAccountStatus(ctx, ORG1_MSP, PENDING.toString());
+            updateAccountStatus(ctx, ORG1_MSP, PENDING);
             assertDoesNotThrow(() -> pdp.certifyVote(ctx, "123", ORG2_MSP));
         }
 
@@ -244,7 +334,12 @@ class BlossomPDPTest {
             MockContext ctx = newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
             pdp.initiateVote(ctx, "123", ORG2_MSP);
 
-            assertThrows(UnauthorizedException.class, () -> pdp.certifyVote(ctx, "123", ORG2_MSP));
+            updateAccountStatus(ctx, ORG2_MSP, PENDING);
+            ChaincodeException e = assertThrows(
+                    ChaincodeException.class,
+                    () -> pdp.certifyVote(ctx, "123", ORG2_MSP)
+            );
+            assertEquals("cid is not authorized to certify a vote on Org2MSP", e.getMessage());
         }
     }
 
@@ -264,7 +359,12 @@ class BlossomPDPTest {
             pdp.initiateVote(ctx, "123", ORG2_MSP);
 
             ctx.setClientIdentity(MockIdentity.ORG2_AO);
-            assertThrows(UnauthorizedException.class, () -> pdp.abortVote(ctx, "123", ORG2_MSP));
+            updateAccountStatus(ctx, ORG2_MSP, PENDING);
+            ChaincodeException e = assertThrows(
+                    ChaincodeException.class,
+                    () -> pdp.abortVote(ctx, "123", ORG2_MSP)
+            );
+            assertEquals("cid is not authorized to abort a vote on Org2MSP", e.getMessage());
         }
 
         @Test
@@ -282,8 +382,12 @@ class BlossomPDPTest {
             pdp.initiateVote(ctx, "123", ORG2_MSP);
 
             ctx.setClientIdentity(MockIdentity.ORG1_AO);
-            updateAccountStatus(ctx, ORG1_MSP, PENDING.toString());
-            assertThrows(UnauthorizedException.class, () -> pdp.abortVote(ctx, "123", ORG2_MSP));
+            updateAccountStatus(ctx, ORG1_MSP, PENDING);
+            ChaincodeException e = assertThrows(
+                    ChaincodeException.class,
+                    () -> pdp.abortVote(ctx, "123", ORG2_MSP)
+            );
+            assertEquals("cid is not authorized to abort a vote on Org2MSP", e.getMessage());
         }
     }
 
@@ -318,7 +422,7 @@ class BlossomPDPTest {
 
             ctx.setClientIdentity(MockIdentity.ORG2_AO);
 
-            updateAccountStatus(ctx, ORG2_MSP, PENDING.toString());
+            updateAccountStatus(ctx, ORG2_MSP, PENDING);
             assertThrows(ChaincodeException.class,
                          () -> voteContract.Vote(ctx, "123", ORG3_MSP, true));
 
@@ -336,7 +440,7 @@ class BlossomPDPTest {
             voteContract.InitiateVote(ctx, ORG2_MSP, AUTHORIZED.toString(), "");
 
             ctx.setClientIdentity(MockIdentity.ORG2_AO);
-            updateAccountStatus(ctx, ORG2_MSP, PENDING.toString());
+            updateAccountStatus(ctx, ORG2_MSP, PENDING);
             assertDoesNotThrow(() -> voteContract.Vote(ctx, "123", ORG2_MSP, true));
         }
 
@@ -345,7 +449,7 @@ class BlossomPDPTest {
             MockContext ctx = newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
             ctx.setTxId("123");
 
-            updateAccountStatus(ctx, ORG2_MSP, PENDING.toString());
+            updateAccountStatus(ctx, ORG2_MSP, PENDING);
 
             voteContract.UpdateVoteConfiguration(ctx, new VoteConfiguration(false, false, false, false));
 
@@ -370,8 +474,12 @@ class BlossomPDPTest {
             voteContract.InitiateVote(ctx, ORG2_MSP, AUTHORIZED.toString(), "");
 
             ctx.setClientIdentity(MockIdentity.ORG2_AO);
-            assertThrows(UnauthorizedException.class,
-                         () -> pdp.certifyVote(ctx, "123", ORG2_MSP));
+            updateAccountStatus(ctx, ORG2_MSP, PENDING);
+            ChaincodeException e = assertThrows(
+                    ChaincodeException.class,
+                    () -> pdp.certifyVote(ctx, "123", ORG2_MSP)
+            );
+            assertEquals("cid is not authorized to certify a vote on Org2MSP", e.getMessage());
 
             ctx.setClientIdentity(MockIdentity.ORG1_AO);
             voteContract.UpdateVoteConfiguration(ctx, new VoteConfiguration(false, false, false, true));
@@ -389,8 +497,12 @@ class BlossomPDPTest {
             voteContract.InitiateVote(ctx, ORG2_MSP, AUTHORIZED.toString(), "");
 
             ctx.setClientIdentity(MockIdentity.ORG2_AO);
-            assertThrows(UnauthorizedException.class,
-                         () -> pdp.abortVote(ctx, "123", ORG2_MSP));
+            updateAccountStatus(ctx, ORG2_MSP, PENDING);
+            ChaincodeException e = assertThrows(
+                    ChaincodeException.class,
+                    () -> pdp.abortVote(ctx, "123", ORG2_MSP)
+            );
+            assertEquals("cid is not authorized to abort a vote on Org2MSP", e.getMessage());
 
             ctx.setClientIdentity(MockIdentity.ORG1_AO);
             voteContract.UpdateVoteConfiguration(ctx, new VoteConfiguration(false, false, false, true));
@@ -405,8 +517,12 @@ class BlossomPDPTest {
             voteContract.InitiateVote(ctx, ORG2_MSP, AUTHORIZED.toString(), "");
 
             ctx.setClientIdentity(MockIdentity.ORG2_AO);
-            assertThrows(UnauthorizedException.class,
-                         () -> pdp.abortVote(ctx, "123", ORG2_MSP));
+            updateAccountStatus(ctx, ORG2_MSP, PENDING);
+            ChaincodeException e = assertThrows(
+                    ChaincodeException.class,
+                    () -> pdp.abortVote(ctx, "123", ORG2_MSP)
+            );
+            assertEquals("cid is not authorized to abort a vote on Org2MSP", e.getMessage());
 
             ctx.setClientIdentity(MockIdentity.ORG1_AO);
             voteContract.UpdateVoteConfiguration(ctx, new VoteConfiguration(false, false, false, true));
@@ -417,7 +533,7 @@ class BlossomPDPTest {
             MockContext ctx = newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
             ctx.setTxId("123");
 
-            updateAccountStatus(ctx, ORG2_MSP, AUTHORIZED.toString());
+            updateAccountStatus(ctx, ORG2_MSP, AUTHORIZED);
             voteContract.UpdateVoteConfiguration(ctx, new VoteConfiguration(false, false, true, true));
 
             ctx.setClientIdentity(MockIdentity.ORG2_AO);
@@ -430,23 +546,32 @@ class BlossomPDPTest {
             ctx.setClientIdentity(MockIdentity.ORG1_AO);
             voteContract.UpdateVoteConfiguration(ctx, new VoteConfiguration(false, false, false, false));
 
-            updateAccountStatus(ctx, ORG2_MSP, PENDING.toString());
+            updateAccountStatus(ctx, ORG2_MSP, PENDING);
 
             ctx.setClientIdentity(MockIdentity.ORG2_AO);
 
             // try certifying and aborting
-            assertThrows(UnauthorizedException.class,
-                         () -> pdp.certifyVote(ctx, "123", ORG2_MSP));
-            assertThrows(UnauthorizedException.class,
+            ChaincodeException e = assertThrows(
+                    ChaincodeException.class,
+                    () -> pdp.certifyVote(ctx, "123", ORG2_MSP)
+            );
+            assertEquals("cid is not authorized to certify a vote on Org2MSP", e.getMessage());
+            e = assertThrows(ChaincodeException.class,
                          () -> pdp.abortVote(ctx, "123", ORG2_MSP));
+            assertEquals("cid is not authorized to abort a vote on Org2MSP", e.getMessage());
 
-            updateAccountStatus(ctx, ORG2_MSP, AUTHORIZED.toString());
+            updateAccountStatus(ctx, ORG2_MSP, AUTHORIZED);
 
             // try certifying and aborting
             assertDoesNotThrow(() -> pdp.certifyVote(ctx, "123", ORG2_MSP));
             // this call will throw NodeDoesNotExist because the above call will delete the vote, however reaching the point
             // where this exception is thrown means the decision passed
-            assertThrows(NodeDoesNotExistException.class, () -> pdp.abortVote(ctx, "123", ORG2_MSP));
+            e = assertThrows(
+                    ChaincodeException.class, 
+                    () -> pdp.abortVote(ctx, "123", ORG2_MSP)
+            );
+            assertEquals("gov.nist.csd.pm.policy.exceptions.NodeDoesNotExistException: a node with the name " +
+                                 "\"Org2MSP-123 vote\" does not exist", e.getMessage());
         }
 
         @Test
@@ -455,10 +580,14 @@ class BlossomPDPTest {
             ctx.setTxId("123");
             pdp.initiateVote(ctx, "123", ORG2_MSP);
 
-            updateAccountStatus(ctx, ORG1_MSP, PENDING.toString());
-            assertThrows(UnauthorizedException.class, () -> pdp.certifyVote(ctx, "123", ORG2_MSP));
+            updateAccountStatus(ctx, ORG1_MSP, PENDING);
+            ChaincodeException e = assertThrows(
+                    ChaincodeException.class,
+                    () -> pdp.certifyVote(ctx, "123", ORG2_MSP)
+            );
+            assertEquals("cid is not authorized to certify a vote on Org2MSP", e.getMessage());
 
-            updateAccountStatus(ctx, ORG1_MSP, AUTHORIZED.toString());
+            updateAccountStatus(ctx, ORG1_MSP, AUTHORIZED);
             assertDoesNotThrow(() -> pdp.certifyVote(ctx, "123", ORG2_MSP));
         }
 
@@ -475,7 +604,7 @@ class BlossomPDPTest {
         void testVoteForSelfWhenInitiatorAndPendingAndAdmin() throws Exception {
             MockContext ctx = newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
             ctx.setTxId("123");
-            updateAccountStatus(ctx, ORG1_MSP, PENDING.toString());
+            updateAccountStatus(ctx, ORG1_MSP, PENDING);
             pdp.initiateVote(ctx, "123", ORG1_MSP);
             assertDoesNotThrow(() -> pdp.vote(ctx, "123", ORG1_MSP));
         }
