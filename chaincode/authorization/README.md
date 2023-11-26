@@ -63,6 +63,12 @@ peer chaincode query -o localhost:7050 --ordererTLSHostnameOverride orderer.exam
 
 - mou:GetMOU
 - mou:SignMOU
+- ato:CreateATO
+- ato:SubmitFeedback
+- ato:UpdateATO
+- vote:InitiateVote
+- vote:Vote
+- vote:CertifyVote
 - mou:Join
 
 ### ATO Process

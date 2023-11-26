@@ -23,8 +23,7 @@ import static contract.MockContextUtil.*;
 import static mock.MockOrgs.*;
 import static model.Status.AUTHORIZED;
 import static model.Status.PENDING;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class ATOContractTest {
 
@@ -214,21 +213,39 @@ public class ATOContractTest {
             Instant now = Instant.now();
             MockContext ctx = newTestMockContextWithAccountsAndATOs(MockIdentity.ORG3_AO, now);
             updateAccountStatus(ctx, ORG3_MSP, AUTHORIZED);
-            ATO ato = contract.GetATO(ctx, ORG2_MSP);
-            assertEquals(
-                    new ATO(
-                            "123",
-                            now.toString(),
-                            now.toString(),
-                            1,
-                            "memo",
-                            "artifacts",
-                            List.of(
-                                    new Feedback(1, ORG1_MSP, "comment1")
-                            )
-                    ),
-                    ato
+
+            ATO expected = new ATO(
+                    "123",
+                    now.toString(),
+                    now.toString(),
+                    1,
+                    "memo",
+                    "artifacts",
+                    List.of(
+                            new Feedback(1, ORG1_MSP, "comment1")
+                    )
             );
+
+            ATO ato = contract.GetATO(ctx, ORG2_MSP);
+            assertEquals(expected, ato);
+
+            ctx.setClientIdentity(MockIdentity.ORG2_AO);
+            ato = contract.GetATO(ctx, ORG2_MSP);
+            assertEquals(expected, ato);
+        }
+
+        @Test
+        void testUnauthorized() throws Exception {
+            Instant now = Instant.now();
+            MockContext ctx = newTestMockContextWithAccountsAndATOs(MockIdentity.ORG3_AO, now);
+            updateAccountStatus(ctx, ORG3_MSP, PENDING);
+            ChaincodeException e = assertThrows(
+                    ChaincodeException.class,
+                    () -> contract.GetATO(ctx, ORG2_MSP)
+            );
+            assertEquals("cid is not authorized to read the ATO of account Org2MSP", e.getMessage());
+
+            assertDoesNotThrow(() -> contract.GetATO(ctx, ORG3_MSP));
         }
 
     }
