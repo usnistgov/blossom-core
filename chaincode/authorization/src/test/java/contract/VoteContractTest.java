@@ -1,14 +1,10 @@
 package contract;
 
-import gov.nist.csd.pm.policy.exceptions.PMException;
-import gov.nist.csd.pm.policy.exceptions.UnauthorizedException;
 import mock.MockContext;
 import mock.MockEvent;
 import mock.MockIdentity;
-import model.Account;
 import model.Status;
 import model.Vote;
-import model.VoteConfiguration;
 import org.apache.commons.lang3.SerializationUtils;
 import org.hyperledger.fabric.shim.ChaincodeException;
 import org.junit.jupiter.api.Nested;
@@ -17,7 +13,6 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.util.List;
 
-import static contract.MockContextUtil.newTestMockContextWithAccounts;
 import static contract.MockContextUtil.updateAccountStatus;
 import static mock.MockOrgs.*;
 import static model.Status.*;
@@ -29,63 +24,6 @@ class VoteContractTest {
 
     VoteContract voteContract = new VoteContract();
     AccountContract accountContract = new AccountContract();
-
-    @Test
-    void testGetVoteConfiguration() throws Exception {
-        MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
-        voteContract.UpdateVoteConfiguration(ctx, new VoteConfiguration(true, true, true, false));
-        VoteConfiguration voteConfiguration = voteContract.GetVoteConfiguration(ctx);
-        assertEquals(
-                new VoteConfiguration(true, true, true, false),
-                voteConfiguration
-        );
-    }
-
-    @Nested
-    class UpdateVoteConfiguration {
-
-        @Test
-        void testAuthorized() throws Exception {
-            MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
-            VoteConfiguration expected = new VoteConfiguration(false, false, false, false);
-            voteContract.UpdateVoteConfiguration(ctx, expected);
-            VoteConfiguration actual = voteContract.GetVoteConfiguration(ctx);
-            assertEquals(
-                    expected,
-                    actual
-            );
-        }
-
-        @Test
-        void testUserUnauthorized() throws Exception {
-            MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
-            VoteConfiguration expected = new VoteConfiguration(false, false, false, false);
-            assertThrows(ChaincodeException.class, () -> voteContract.UpdateVoteConfiguration(ctx, expected));
-        }
-
-        @Test
-        void testBlossomAdminAccountUnauthorized() throws Exception {
-            MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
-            updateAccountStatus(ctx, "Org1MSP", PENDING);
-            assertThrows(ChaincodeException.class,
-                         () -> voteContract.UpdateVoteConfiguration(ctx, new VoteConfiguration(false, false, false, false)));
-        }
-
-        @Test
-        void testEvent() throws Exception {
-            MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
-            VoteConfiguration expected = new VoteConfiguration(true, true, false, false);
-            voteContract.UpdateVoteConfiguration(ctx, expected);
-
-            MockEvent mockEvent = ctx.getStub().getMockEvent();
-            assertEquals("UpdateVoteConfiguration", mockEvent.getName());
-            VoteConfiguration config = SerializationUtils.deserialize(mockEvent.getPayload());
-            assertEquals(
-                    new VoteConfiguration(true, true, false, false),
-                    config
-            );
-        }
-    }
 
     @Nested
     class InitiateVote {
@@ -104,7 +42,6 @@ class VoteContractTest {
             updateAccountStatus(ctx, ORG2_MSP, Status.AUTHORIZED);
             voteContract.InitiateVote(ctx, ORG3_MSP, Status.UNAUTHORIZED.toString(), "reason");
             assertThrows(ChaincodeException.class, () -> voteContract.InitiateVote(ctx, ORG3_MSP, Status.UNAUTHORIZED.toString(), "reason"));
-
         }
 
         @Test
@@ -122,7 +59,7 @@ class VoteContractTest {
             Vote vote = voteContract.GetVote(ctx, "1", "Org2MSP");
             assertEquals(new Vote(
                     "1", "Org1MSP", "Org2MSP", AUTHORIZED,
-                    "reason", MAJORITY, 0, ONGOING
+                    "reason", MAJORITY, 0, List.of(ORG1_MSP, ORG2_MSP, ORG3_MSP), ONGOING
             ), vote);
 
             ctx.setTxId("2");
@@ -131,7 +68,23 @@ class VoteContractTest {
             vote = voteContract.GetVote(ctx, "2", "Org1MSP");
             assertEquals(new Vote(
                     "2", "Org1MSP", "Org1MSP", AUTHORIZED,
-                    "reason", Vote.Threshold.SUPER_MAJORITY, 0, ONGOING
+                    "reason", Vote.Threshold.SUPER_MAJORITY, 0, List.of(ORG1_MSP, ORG2_MSP, ORG3_MSP), ONGOING
+            ), vote);
+        }
+
+        @Test
+        void testSetVoters() throws Exception {
+            MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
+            updateAccountStatus(ctx, ORG3_MSP, PENDING);
+
+            ctx.setTxId("2");
+
+            voteContract.InitiateVote(ctx, "Org1MSP", AUTHORIZED.toString(), "reason");
+
+            Vote vote = voteContract.GetVote(ctx, "2", "Org1MSP");
+            assertEquals(new Vote(
+                    "2", "Org1MSP", "Org1MSP", AUTHORIZED,
+                    "reason", Vote.Threshold.SUPER_MAJORITY, 0, List.of(ORG1_MSP, ORG2_MSP), ONGOING
             ), vote);
         }
 
@@ -145,7 +98,7 @@ class VoteContractTest {
             assertEquals("InitiateVote", mockEvent.getName());
             Vote vote = SerializationUtils.deserialize(mockEvent.getPayload());
             assertEquals(
-                    new Vote("1", ORG1_MSP, ORG2_MSP, AUTHORIZED, "reason", MAJORITY, 0, ONGOING),
+                    new Vote("1", ORG1_MSP, ORG2_MSP, AUTHORIZED, "reason", MAJORITY, 0, List.of(ORG1_MSP, ORG2_MSP, ORG3_MSP), ONGOING),
                     vote
             );
         }
@@ -157,7 +110,7 @@ class VoteContractTest {
         @Test
         void testVoteDoesNotExistThrowsException() throws Exception {
             // initiate vote
-            MockContext ctx = initializeCtx();
+            MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
 
             assertThrows(VoteContract.VoteDoesNotExistException.class, () -> voteContract.CertifyVote(ctx, "123", ORG3_MSP));
         }
@@ -165,7 +118,7 @@ class VoteContractTest {
         @Test
         void testVoteHasAlreadyBeenCompletedThrowsException() throws Exception {
             // initiate vote
-            MockContext ctx = initializeCtx();
+            MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
 
             String id = initiateTestVote(ctx, ORG3_MSP);
 
@@ -187,7 +140,7 @@ class VoteContractTest {
         @Test
         void testCompleteVoteFailed() throws Exception {
             // initiate vote
-            MockContext ctx = initializeCtx();
+            MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
 
             String id = initiateTestVote(ctx, ORG3_MSP);
 
@@ -216,7 +169,7 @@ class VoteContractTest {
         @Test
         void testCompleteVotePassed() throws Exception {
             // initiate vote
-            MockContext ctx = initializeCtx();
+            MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
 
             String id = initiateTestVote(ctx, ORG3_MSP);
 
@@ -241,7 +194,7 @@ class VoteContractTest {
         @Test
         void testCompleteVoteNotEnoughForResult() throws Exception {
             // initiate vote
-            MockContext ctx = initializeCtx();
+            MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
 
             String id = initiateTestVote(ctx, ORG3_MSP);
 
@@ -251,7 +204,9 @@ class VoteContractTest {
 
             // complete vote passed
             ctx.setClientIdentity(MockIdentity.ORG2_AO);
-            assertThrows(ChaincodeException.class, () -> voteContract.CertifyVote(ctx, id, ORG3_MSP));
+            ChaincodeException e = assertThrows(
+                    ChaincodeException.class, () -> voteContract.CertifyVote(ctx, id, ORG3_MSP));
+            assertEquals("not enough votes for a result", e.getMessage());
 
             ctx.setClientIdentity(MockIdentity.ORG3_AO);
             Status status = accountContract.GetAccountStatus(ctx);
@@ -261,7 +216,7 @@ class VoteContractTest {
         @Test
         void testCompleteVoteOnBlossomAdminRequiresSuperMajorityPassed() throws Exception {
             // initiate vote
-            MockContext ctx = initializeCtx();
+            MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
 
             String id = initiateTestVote(ctx, ORG1_MSP);
 
@@ -283,7 +238,7 @@ class VoteContractTest {
         @Test
         void testCompleteVoteOnBlossomAdminRequiresSuperMajorityFailed() throws Exception {
             // initiate vote
-            MockContext ctx = initializeCtx();
+            MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
 
             String id = initiateTestVote(ctx, ORG1_MSP);
 
@@ -303,37 +258,9 @@ class VoteContractTest {
         }
 
         @Test
-        void testWhenSelfVoteIsDisallowedAfterVoteButBeforeCertify() throws Exception {
-            // initiate vote
-            MockContext ctx = initializeCtx();
-
-            String id = initiateTestVote(ctx, ORG2_MSP);
-
-            // vote YES as Org1
-            ctx.setClientIdentity(MockIdentity.ORG1_AO);
-            voteContract.Vote(ctx, id, ORG2_MSP, true);
-
-            // vote YES as Org2 (self)
-            ctx.setClientIdentity(MockIdentity.ORG2_AO);
-            voteContract.Vote(ctx, id, ORG2_MSP, true);
-
-            // vote yes Org3
-            ctx.setClientIdentity(MockIdentity.ORG3_AO);
-            voteContract.Vote(ctx, id, ORG2_MSP, false);
-
-            // update config to not allow self vote
-            ctx.setClientIdentity(MockIdentity.ORG1_AO);
-            voteContract.UpdateVoteConfiguration(ctx, new VoteConfiguration(false, false, false, false));
-
-            ctx.setClientIdentity(MockIdentity.ORG2_AO);
-            boolean result = voteContract.CertifyVote(ctx, id, ORG2_MSP);
-            assertFalse(result);
-        }
-
-        @Test
         void testEvent() throws Exception {
             // initiate vote
-            MockContext ctx = initializeCtx();
+            MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
 
             String id = initiateTestVote(ctx, ORG2_MSP);
 
@@ -356,7 +283,8 @@ class VoteContractTest {
             assertEquals("CertifyVote", mockEvent.getName());
             Vote vote = SerializationUtils.deserialize(mockEvent.getPayload());
             assertEquals(
-                    new Vote("123", ORG2_MSP, ORG2_MSP, UNAUTHORIZED, "reason", MAJORITY, 3, PASSED),
+                    new Vote("123", ORG2_MSP, ORG2_MSP, UNAUTHORIZED, "reason", MAJORITY, 3,
+                             List.of(ORG1_MSP, ORG2_MSP, ORG3_MSP), PASSED),
                     vote
             );
         }
@@ -368,7 +296,7 @@ class VoteContractTest {
         @Test
         void testVoteDoesNotExistThrowsException() throws Exception {
             // initiate vote
-            MockContext ctx = initializeCtx();
+            MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
 
             assertThrows(VoteContract.VoteDoesNotExistException.class, () -> voteContract.AbortVote(ctx, "123", ORG3_MSP));
 
@@ -377,7 +305,7 @@ class VoteContractTest {
         @Test
         void testVoteHasBeenCompletedThrowsException() throws Exception {
             // initiate vote
-            MockContext ctx = initializeCtx();
+            MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
 
             String id = initiateTestVote(ctx, ORG3_MSP);
 
@@ -400,20 +328,20 @@ class VoteContractTest {
 
         @Test
         void testSuccess() throws Exception {
-            MockContext ctx = initializeCtx();
+            MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
 
             String id = initiateTestVote(ctx, ORG3_MSP);
 
             voteContract.AbortVote(ctx, id, ORG3_MSP);
 
-            assertThrows(VoteContract.VoteDoesNotExistException.class,
-                         () -> voteContract.GetVote(ctx, id, ORG3_MSP));
+            Vote vote = voteContract.GetVote(ctx, id, ORG3_MSP);
+            assertEquals(ABORTED, vote.getResult());
         }
 
         @Test
         void testEvent() throws Exception {
             // initiate vote
-            MockContext ctx = initializeCtx();
+            MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
 
             String id = initiateTestVote(ctx, ORG2_MSP);
 
@@ -429,14 +357,15 @@ class VoteContractTest {
             ctx.setClientIdentity(MockIdentity.ORG3_AO);
             voteContract.Vote(ctx, id, ORG2_MSP, false);
 
-            ctx.setClientIdentity(MockIdentity.ORG1_AO);
+            ctx.setClientIdentity(MockIdentity.ORG2_AO);
             voteContract.AbortVote(ctx, id, ORG2_MSP);
 
             MockEvent mockEvent = ctx.getStub().getMockEvent();
             assertEquals("AbortVote", mockEvent.getName());
             Vote vote = SerializationUtils.deserialize(mockEvent.getPayload());
             assertEquals(
-                    new Vote("123", ORG2_MSP, ORG2_MSP, UNAUTHORIZED, "reason", MAJORITY, 3, ABORTED),
+                    new Vote("123", ORG2_MSP, ORG2_MSP, UNAUTHORIZED, "reason", MAJORITY, 3,
+                             List.of(ORG1_MSP, ORG2_MSP, ORG3_MSP), ABORTED),
                     vote
             );
         }
@@ -447,7 +376,7 @@ class VoteContractTest {
 
         @Test
         void testGetUnknownVote() throws Exception {
-            MockContext ctx = initializeCtx();
+            MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
 
             initiateTestVote(ctx, ORG3_MSP);
 
@@ -456,13 +385,14 @@ class VoteContractTest {
 
         @Test
         void testGetVote() throws Exception {
-            MockContext ctx = initializeCtx();
+            MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
 
             String id = initiateTestVote(ctx, ORG3_MSP);
 
             Vote vote = voteContract.GetVote(ctx, id, ORG3_MSP);
             assertEquals(new Vote(
-                    id, ORG2_MSP, ORG3_MSP, Status.UNAUTHORIZED, "reason", MAJORITY, 0, ONGOING
+                    id, ORG2_MSP, ORG3_MSP, Status.UNAUTHORIZED, "reason", MAJORITY, 0,
+                    List.of(ORG1_MSP, ORG2_MSP, ORG3_MSP), ONGOING
             ), vote);
 
             // add vote
@@ -471,7 +401,8 @@ class VoteContractTest {
 
             vote = voteContract.GetVote(ctx, id, ORG3_MSP);
             assertEquals(new Vote(
-                    id, ORG2_MSP, ORG3_MSP, Status.UNAUTHORIZED, "reason", MAJORITY, 1, ONGOING
+                    id, ORG2_MSP, ORG3_MSP, Status.UNAUTHORIZED, "reason", MAJORITY, 1,
+                    List.of(ORG1_MSP, ORG2_MSP, ORG3_MSP), ONGOING
             ), vote);
 
             ctx.setClientIdentity(MockIdentity.ORG2_AO);
@@ -479,7 +410,8 @@ class VoteContractTest {
 
             vote = voteContract.GetVote(ctx, id, ORG3_MSP);
             assertEquals(new Vote(
-                    id, ORG2_MSP, ORG3_MSP, Status.UNAUTHORIZED, "reason", MAJORITY, 2, ONGOING
+                    id, ORG2_MSP, ORG3_MSP, Status.UNAUTHORIZED, "reason", MAJORITY, 2,
+                    List.of(ORG1_MSP, ORG2_MSP, ORG3_MSP), ONGOING
             ), vote);
 
             // complete vote
@@ -487,7 +419,8 @@ class VoteContractTest {
 
             vote = voteContract.GetVote(ctx, id, ORG3_MSP);
             assertEquals(new Vote(
-                    id, ORG2_MSP, ORG3_MSP, Status.UNAUTHORIZED, "reason", MAJORITY, 2, Vote.Result.PASSED
+                    id, ORG2_MSP, ORG3_MSP, Status.UNAUTHORIZED, "reason", MAJORITY, 2,
+                    List.of(ORG1_MSP, ORG2_MSP, ORG3_MSP), Vote.Result.PASSED
             ), vote);
 
             // get vote with super
@@ -495,7 +428,8 @@ class VoteContractTest {
             id = voteContract.GetOngoingVoteForMember(ctx, ORG1_MSP).getId();
             vote = voteContract.GetVote(ctx, id, ORG1_MSP);
             assertEquals(new Vote(
-                    id, ORG2_MSP, ORG1_MSP, Status.UNAUTHORIZED, "reason", Vote.Threshold.SUPER_MAJORITY, 0, ONGOING
+                    id, ORG2_MSP, ORG1_MSP, Status.UNAUTHORIZED, "reason", Vote.Threshold.SUPER_MAJORITY, 0,
+                    List.of(ORG1_MSP, ORG2_MSP, ORG3_MSP), ONGOING
             ), vote);
         }
 
@@ -506,7 +440,7 @@ class VoteContractTest {
 
         @Test
         void testGetVotes() throws Exception {
-            MockContext ctx = initializeCtx();
+            MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
 
             String id = initiateTestVote(ctx, ORG3_MSP);
 
@@ -518,10 +452,12 @@ class VoteContractTest {
 
             List<Vote> votes = voteContract.GetVotes(ctx);
             assertTrue(votes.contains(new Vote(
-                    id, ORG2_MSP, ORG3_MSP, Status.UNAUTHORIZED, "reason", MAJORITY, 0, ONGOING
+                    id, ORG2_MSP, ORG3_MSP, Status.UNAUTHORIZED, "reason", MAJORITY, 0,
+                    List.of(ORG1_MSP, ORG2_MSP, ORG3_MSP), ONGOING
             )));
             assertTrue(votes.contains(new Vote(
-                    id2, ORG2_MSP, ORG1_MSP, Status.UNAUTHORIZED, "reason", Vote.Threshold.SUPER_MAJORITY, 0, ONGOING
+                    id2, ORG2_MSP, ORG1_MSP, Status.UNAUTHORIZED, "reason", Vote.Threshold.SUPER_MAJORITY, 0,
+                    List.of(ORG1_MSP, ORG2_MSP, ORG3_MSP), ONGOING
             )));
         }
 
@@ -532,7 +468,7 @@ class VoteContractTest {
 
         @Test
         void testOngoingGetVotes() throws Exception {
-            MockContext ctx = initializeCtx();
+            MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
 
             String id = initiateTestVote(ctx, ORG3_MSP);
 
@@ -553,7 +489,8 @@ class VoteContractTest {
             List<Vote> votes = voteContract.GetOngoingVotes(ctx);
             assertEquals(1, votes.size());
             assertTrue(votes.contains(new Vote(
-                    id, ORG2_MSP, ORG3_MSP, Status.UNAUTHORIZED, "reason", MAJORITY, 0, ONGOING
+                    id, ORG2_MSP, ORG3_MSP, Status.UNAUTHORIZED, "reason", MAJORITY, 0,
+                    List.of(ORG1_MSP, ORG2_MSP, ORG3_MSP), ONGOING
             )));
         }
 
@@ -564,7 +501,7 @@ class VoteContractTest {
 
         @Test
         void testGetVotesForMember() throws Exception {
-            MockContext ctx = initializeCtx();
+            MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
 
             String id = initiateTestVote(ctx, ORG3_MSP);
 
@@ -574,7 +511,8 @@ class VoteContractTest {
             List<Vote> votes = voteContract.GetVotesForMember(ctx, ORG3_MSP);
             assertEquals(1, votes.size());
             assertTrue(votes.contains(new Vote(
-                    id, ORG2_MSP, ORG3_MSP, Status.UNAUTHORIZED, "reason", MAJORITY, 0, ONGOING
+                    id, ORG2_MSP, ORG3_MSP, Status.UNAUTHORIZED, "reason", MAJORITY, 0,
+                    List.of(ORG1_MSP, ORG2_MSP, ORG3_MSP), ONGOING
             )));
         }
     }
@@ -583,14 +521,15 @@ class VoteContractTest {
     class GetOngoingVoteForMember {
         @Test
         void testGetVotesForMember() throws Exception {
-            MockContext ctx = initializeCtx();
+            MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
 
             String id = initiateTestVote(ctx, ORG3_MSP);
             String id2 = initiateTestVote(ctx, ORG1_MSP);
 
             Vote vote = voteContract.GetOngoingVoteForMember(ctx, ORG3_MSP);
             assertEquals(new Vote(
-                    id, ORG2_MSP, ORG3_MSP, Status.UNAUTHORIZED, "reason", MAJORITY, 0, ONGOING
+                    id, ORG2_MSP, ORG3_MSP, Status.UNAUTHORIZED, "reason", MAJORITY, 0,
+                    List.of(ORG1_MSP, ORG2_MSP, ORG3_MSP), ONGOING
             ), vote);
         }
     }
@@ -600,7 +539,7 @@ class VoteContractTest {
 
         @Test
         void testVoteDoesNotExistThrowsException() throws Exception {
-            MockContext ctx = initializeCtx();
+            MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
 
             ctx.setClientIdentity(MockIdentity.ORG2_NON_AO);
             assertThrows(VoteContract.VoteDoesNotExistException.class, () -> voteContract.Vote(ctx, "123", ORG3_MSP, true));
@@ -608,7 +547,7 @@ class VoteContractTest {
 
         @Test
         void testVoteHasAlreadyBeenCompletedThrowsException() throws Exception {
-            MockContext ctx = initializeCtx();
+            MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
 
             String id = initiateTestVote(ctx, ORG3_MSP);
 
@@ -630,26 +569,14 @@ class VoteContractTest {
 
             // try voting again
             ctx.setClientIdentity(MockIdentity.ORG1_AO);
-            assertThrows(VoteContract.VoteHasAlreadyBeenCompletedException.class,
+            ChaincodeException e = assertThrows(ChaincodeException.class,
                          () -> voteContract.Vote(ctx, id, ORG3_MSP, true));
+            assertEquals("already cast vote", e.getMessage());
         }
 
         @Test
-        void testMembersCanNotVoteOnThemselvesThrowsException() throws Exception {
-            MockContext ctx = initializeCtx();
-
-            ctx.setClientIdentity(MockIdentity.ORG1_AO);
-            voteContract.UpdateVoteConfiguration(ctx, new VoteConfiguration(false, false, false, false));
-
-            String id = initiateTestVote(ctx, ORG2_MSP);
-
-            ctx.setClientIdentity(MockIdentity.ORG2_AO);
-            assertThrows(ChaincodeException.class, () -> voteContract.Vote(ctx, id, ORG2_MSP, true));
-        }
-
-        @Test
-        void testMemberUpdatesVotesDoesNotChangeCount() throws Exception {
-            MockContext ctx = initializeCtx();
+        void testMemberCannotVoteTwice() throws Exception {
+            MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
 
             String id = initiateTestVote(ctx, ORG3_MSP);
 
@@ -667,20 +594,17 @@ class VoteContractTest {
 
             // change vote for org2
             ctx.setClientIdentity(MockIdentity.ORG2_AO);
-            voteContract.Vote(ctx, id, ORG3_MSP, false);
-
-            assertEquals(3, voteContract.GetVote(ctx, id, ORG3_MSP).getCount());
-
-            // complete vote - expect fail
-            ctx.setClientIdentity(MockIdentity.ORG2_AO);
-            boolean result = voteContract.CertifyVote(ctx, id, ORG3_MSP);
-            assertFalse(result);
+            ChaincodeException e = assertThrows(
+                    ChaincodeException.class, 
+                    () -> voteContract.Vote(ctx, id, ORG3_MSP, false)
+            );
+            assertEquals("already cast vote", e.getMessage());
         }
 
         @Test
         void testEvent() throws Exception {
             // initiate vote
-            MockContext ctx = initializeCtx();
+            MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
 
             String id = initiateTestVote(ctx, ORG2_MSP);
 
@@ -692,22 +616,11 @@ class VoteContractTest {
             assertEquals("Vote", mockEvent.getName());
             Vote vote = SerializationUtils.deserialize(mockEvent.getPayload());
             assertEquals(
-                    new Vote("123", ORG2_MSP, ORG2_MSP, UNAUTHORIZED, "reason", MAJORITY, 1, ONGOING),
+                    new Vote("123", ORG2_MSP, ORG2_MSP, UNAUTHORIZED, "reason", MAJORITY, 1, 
+                             List.of(ORG1_MSP, ORG2_MSP, ORG3_MSP), ONGOING),
                     vote
             );
         }
-    }
-
-    private MockContext initializeCtx() throws Exception {
-        MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
-
-        updateAccountStatus(ctx, ORG2_MSP, Status.AUTHORIZED);
-        updateAccountStatus(ctx, ORG3_MSP, Status.AUTHORIZED);
-
-        voteContract.UpdateVoteConfiguration(ctx, new VoteConfiguration(true, true, true, false));
-
-        ctx.setClientIdentity(MockIdentity.ORG2_AO);
-        return ctx;
     }
 
     private String initiateTestVote(MockContext ctx, String targetMember) throws Exception {

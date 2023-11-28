@@ -1,12 +1,5 @@
 const ADMINMSP = "Org1MSP"
 
-DEFAULT_VOTE_CONFIG := {
-    "voteOnSelf": true,
-    "voteWhenNotAuthorized": true,
-    "initiateVoteOnSelfWhenNotAuthorized": true,
-    "certifyOrAbortVoteWhenNotAuthorized": false
-}
-
 set resource access rights [
     "bootstrap",
     "update_vote_config",
@@ -19,7 +12,9 @@ set resource access rights [
     "vote",
     "abort_vote",
     "certify_vote",
-    "submit_feedback"
+    "submit_feedback",
+    "read_ato",
+    "join"
 ]
 
 create pc "RBAC" {
@@ -40,8 +35,8 @@ create pc "RBAC" {
         // this association is with the blossom target because these permissions are never lost
         // association directly with the OA applies the association to all policy classes the OA is contained in
         "Authorizing Official"  and "blossom_target"        with ["get_mou", "sign_mou", "join"]
-        "Authorizing Official"  and "RBAC/votes"            with ["vote", "certify_vote", "abort_vote"]
-        "Authorizing Official"  and "RBAC/accounts"         with ["initiate_vote", "submit_feedback"]
+        "Authorizing Official"  and "RBAC/votes"            with ["vote", "certify_vote", "abort_vote", "read_ato"]
+        "Authorizing Official"  and "RBAC/accounts"         with ["initiate_vote", "submit_feedback", "read_ato", "join"]
     }
 }
 
@@ -74,85 +69,14 @@ create pc "Votes" {
     }
 
     associations {
-        "Blossom Admin"         and "all votes" with ["certify_vote", "abort_vote"]
+        "Blossom Admin"         and "all votes" with ["certify_vote"]
         "Authorizing Official"  and "all votes" with ["vote"]
     }
 }
 
-// configure voting configuration based on the default config defined above
-updateVoteConfig(DEFAULT_VOTE_CONFIG)
-
 // bootstrap adminmsp account
-join(ADMINMSP)
+signMOU(ADMINMSP)
 updateAccountStatus(ADMINMSP, "AUTHORIZED")
-
-
-// functions
-function updateVoteConfig(map[string]bool config) {
-    // self vote is handled at the chaincode level
-
-    arsOnAccounts := ["write_ato"]
-    arsOnVotes    := []
-
-    // voteWhenNotAuthorized
-    if config.voteWhenNotAuthorized {
-        arsOnVotes = append(arsOnVotes, "vote")
-    }
-
-    // initiateVoteOnSelfWhenNotAuthorized
-    if config.initiateVoteOnSelfWhenNotAuthorized {
-        arsOnAccounts = append(arsOnAccounts, "initiate_vote")
-    }
-
-    // certifyOrAbortVoteWhenNotAuthorized
-    if config.certifyOrAbortVoteWhenNotAuthorized {
-        arsOnVotes = appendAll(arsOnVotes, ["certify_vote", "abort_vote"])
-    }
-
-    associate "pending" and "Status/accounts"   with arsOnAccounts
-    associate "pending" and "Status/votes"      with arsOnVotes
-}
-
-function accountUsersNodeName(string account) string {
-    return account + " users"
-}
-
-function accountAttributeNodeName(string account) string {
-    return account + " account"
-}
-
-function accountObjectNodeName(string account) string {
-    return account + " target"
-}
-
-function accountVotes(string account) string {
-    return account + " votes"
-}
-
-function initiateVoteDenyLabel(string accountUA) string {
-    return "deny-" + accountUA + "-initiate_vote-except-on-self"
-}
-
-function denyInitiateVoteAndSubmitFeedbackExceptOnSelf(string accountUA, string accountOA) {
-    create prohibition initiateVoteDenyLabel(accountUA)
-    deny user attribute accountUA
-    access rights ["initiate_vote", "submit_feedback"]
-    on intersection of ["Status/accounts", !accountOA]
-}
-
-function join(string accountId) {
-    accountUA := accountUsersNodeName(accountId)
-    accountOA := accountAttributeNodeName(accountId)
-    accountO  := accountObjectNodeName(accountId)
-
-    create ua accountUA assign to ["pending"]
-    create oa accountOA assign to ["RBAC/accounts", "Status/accounts"]
-    create o accountO assign to [accountOA]
-
-    associate accountUA and accountOA with ["write_ato", "submit_feedback"]
-
-    denyInitiateVoteAndSubmitFeedbackExceptOnSelf(accountUA, accountOA)
-}
 
 function initiateVote(string initiator, string voteID, string targetMember) {
     initiatorUsers  := accountUsersNodeName(initiator)
@@ -193,18 +117,60 @@ function updateAccountStatus(string accountID, string status) {
 
         // delete initiate vote prohibition that prevents the account from initiating votes on
         // other accounts when status is pending
-        delete prohibition initiateVoteDenyLabel(accountUA)
+        delete prohibition accountDenyLabel(accountUA)
     } else if status == "PENDING" {
         assign      accountUA to    ["pending"]
         deassign    accountUA from  ["authorized", "unauthorized"]
 
-        delete prohibition initiateVoteDenyLabel(accountUA)
-        denyInitiateVoteAndSubmitFeedbackExceptOnSelf(accountUA, accountOA)
+        delete prohibition accountDenyLabel(accountUA)
+        denyPendingAccountsOnAccounts(accountUA, accountOA)
     } else {
         assign      accountUA to    ["unauthorized"]
         deassign    accountUA from  ["authorized", "pending"]
 
-        delete prohibition initiateVoteDenyLabel(accountUA)
-        denyInitiateVoteAndSubmitFeedbackExceptOnSelf(accountUA, accountOA)
+        delete prohibition accountDenyLabel(accountUA)
+        denyPendingAccountsOnAccounts(accountUA, accountOA)
     }
+}
+
+function signMOU(string accountId) {
+    accountUA := accountUsersNodeName(accountId)
+    accountOA := accountAttributeNodeName(accountId)
+    accountO  := accountObjectNodeName(accountId)
+
+    if nodeExists(accountUA) {
+        return
+    }
+
+    // create account ua, container, and object
+    create ua accountUA assign to ["pending"]
+    create oa accountOA assign to ["RBAC/accounts", "Status/accounts"]
+    create o accountO assign to [accountOA]
+
+    associate accountUA and accountOA with ["write_ato", "submit_feedback", "read_ato"]
+
+    denyPendingAccountsOnAccounts(accountUA, accountOA)
+}
+
+function denyPendingAccountsOnAccounts(string accountUA, string accountOA) {
+    create prohibition accountDenyLabel(accountUA)
+    deny user attribute accountUA
+    access rights ["initiate_vote", "submit_feedback", "read_ato"]
+    on intersection of ["Status/accounts", !accountOA]
+}
+
+function accountUsersNodeName(string account) string {
+    return account + " users"
+}
+
+function accountAttributeNodeName(string account) string {
+    return account + " account"
+}
+
+function accountObjectNodeName(string account) string {
+    return account + " target"
+}
+
+function accountDenyLabel(string accountUA) string {
+    return "deny " + accountUA + " initiate_vote, submit_feedback, read_ato except on self"
 }

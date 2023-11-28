@@ -1,12 +1,5 @@
 const ADMINMSP = "Org1MSP"
 
-DEFAULT_VOTE_CONFIG := {
-    "voteOnSelf": true,
-    "voteWhenNotAuthorized": true,
-    "initiateVoteOnSelfWhenNotAuthorized": true,
-    "certifyOrAbortVoteWhenNotAuthorized": false
-}
-
 set resource access rights [
     "bootstrap",
     "update_vote_config",
@@ -76,43 +69,14 @@ create pc "Votes" {
     }
 
     associations {
-        "Blossom Admin"         and "all votes" with ["certify_vote", "abort_vote"]
+        "Blossom Admin"         and "all votes" with ["certify_vote"]
         "Authorizing Official"  and "all votes" with ["vote"]
     }
 }
 
-// configure voting configuration based on the default config defined above
-updateVoteConfig(DEFAULT_VOTE_CONFIG)
-
 // bootstrap adminmsp account
 signMOU(ADMINMSP)
 updateAccountStatus(ADMINMSP, "AUTHORIZED")
-
-// functions
-function updateVoteConfig(map[string]bool config) {
-    // self vote is handled at the chaincode level
-
-    arsOnAccounts := ["write_ato"]
-    arsOnVotes    := []
-
-    // voteWhenNotAuthorized
-    if config.voteWhenNotAuthorized {
-        arsOnVotes = append(arsOnVotes, "vote")
-    }
-
-    // initiateVoteOnSelfWhenNotAuthorized
-    if config.initiateVoteOnSelfWhenNotAuthorized {
-        arsOnAccounts = append(arsOnAccounts, "initiate_vote")
-    }
-
-    // certifyOrAbortVoteWhenNotAuthorized
-    if config.certifyOrAbortVoteWhenNotAuthorized {
-        arsOnVotes = appendAll(arsOnVotes, ["certify_vote", "abort_vote"])
-    }
-
-    associate "pending" and "Status/accounts"   with arsOnAccounts
-    associate "pending" and "Status/votes"      with arsOnVotes
-}
 
 function initiateVote(string initiator, string voteID, string targetMember) {
     initiatorUsers  := accountUsersNodeName(initiator)

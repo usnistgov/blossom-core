@@ -3,10 +3,8 @@ package contract;
 import gov.nist.csd.pm.pap.PAP;
 import gov.nist.csd.pm.policy.exceptions.PMException;
 import gov.nist.csd.pm.policy.serialization.json.JSONSerializer;
-import model.ATO;
 import model.Account;
 import model.Status;
-import model.VoteConfiguration;
 import ngac.BlossomPDP;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.SerializationUtils;
@@ -23,6 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 import static contract.AccountContract.accountKey;
+import static contract.VoteContract.VOTE_CONFIG_KEY;
 
 /**
  * Chaincode functions to bootstrap the Blossom system.
@@ -36,10 +35,6 @@ import static contract.AccountContract.accountKey;
         )
 )
 public class BootstrapContract implements ContractInterface {
-
-    public static VoteConfiguration DEFAULT_VOTE_CONFIG = new VoteConfiguration(
-            true, true, true, false
-    );
 
     /**
      * Bootstrap the Blossom authorization chaincode by initializing the NGAC policy. The account identified by the ADMINMSP
@@ -58,7 +53,7 @@ public class BootstrapContract implements ContractInterface {
     public void Bootstrap(Context ctx) {
         // check if this has been called already by checking if the policy has already been created
         byte[] policyBytes = ctx.getStub().getState("policy");
-        if (policyBytes != null && policyBytes.length > 0) {
+        if (policyBytes.length > 0) {
             throw new ChaincodeException("Bootstrap already called");
         }
 
@@ -88,8 +83,10 @@ public class BootstrapContract implements ContractInterface {
         String mspid = ctx.getClientIdentity().getMSPID();
         Account account = new Account(mspid, Status.AUTHORIZED, 0, true);
         ctx.getStub().putState(accountKey(mspid), SerializationUtils.serialize(account));
+    }
 
-        // put default vote configuration on ledger
-        new VoteContract().UpdateVoteConfiguration(ctx, DEFAULT_VOTE_CONFIG);
+    @Transaction
+    public String Test(Context ctx) {
+        return "hello blossom";
     }
 }

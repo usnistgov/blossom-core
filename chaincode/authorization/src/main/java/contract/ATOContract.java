@@ -97,7 +97,7 @@ public class ATOContract implements ContractInterface {
         pdp.readATO(ctx, accountId);
 
         byte[] atoBytes = ctx.getStub().getPrivateData(accountImplicitDataCollection(accountId), atoKey(accountId));
-        if (atoBytes == null || atoBytes.length == 0) {
+        if (atoBytes.length == 0) {
             throw new ChaincodeException(accountId + " has not created an ATO yet");
         }
 

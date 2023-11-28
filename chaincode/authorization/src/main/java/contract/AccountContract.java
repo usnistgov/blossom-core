@@ -123,7 +123,7 @@ public class AccountContract implements ContractInterface {
     @Transaction
     public Account GetAccount(Context ctx, String accountId) {
         byte[] bytes = ctx.getStub().getState(accountKey(accountId));
-        if (bytes == null) {
+        if (bytes.length == 0) {
             throw new ChaincodeException("an account with id " + accountId + " does not exist");
         }
 

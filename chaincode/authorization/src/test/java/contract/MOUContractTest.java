@@ -2,13 +2,11 @@ package contract;
 
 import contract.event.SignMOUEvent;
 import gov.nist.csd.pm.policy.exceptions.PMException;
-import gov.nist.csd.pm.policy.exceptions.UnauthorizedException;
 import mock.MockContext;
 import mock.MockEvent;
 import mock.MockIdentity;
 import model.Account;
 import model.MOU;
-import model.VoteConfiguration;
 import org.apache.commons.lang3.SerializationUtils;
 import org.hyperledger.fabric.shim.ChaincodeException;
 import org.junit.jupiter.api.Nested;
@@ -18,9 +16,8 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
 
-import static contract.BootstrapContractTest.TEST_VOTE_CONFIG;
 import static contract.MockContextUtil.updateAccountStatus;
-import static mock.MockOrgs.ORG2_MSP;
+import static mock.MockOrgs.*;
 import static model.Status.AUTHORIZED;
 import static model.Status.PENDING;
 import static org.junit.jupiter.api.Assertions.*;
@@ -31,6 +28,13 @@ class MOUContractTest {
 
     @Nested
     class UpdateMOUTest {
+
+        @Test
+        void testBeforeBootstrap() {
+            MockContext mockContext = new MockContext(MockIdentity.ORG1_AO);
+            ChaincodeException e = assertThrows(ChaincodeException.class, () -> contract.UpdateMOU(mockContext, ""));
+            assertEquals("ngac policy has not been initialized", e.getMessage());
+        }
 
         @Test
         void testAuthorized() throws PMException, IOException {

@@ -12,7 +12,6 @@ import gov.nist.csd.pm.policy.pml.value.Value;
 import gov.nist.csd.pm.policy.serialization.json.JSONDeserializer;
 import gov.nist.csd.pm.policy.serialization.json.JSONSerializer;
 import gov.nist.csd.pm.policy.serialization.pml.PMLDeserializer;
-import model.VoteConfiguration;
 import org.bouncycastle.asn1.x500.AttributeTypeAndValue;
 import org.bouncycastle.asn1.x500.RDN;
 import org.bouncycastle.asn1.x500.X500Name;
@@ -116,17 +115,6 @@ public class BlossomPDP {
      */
     public void updateMOU(Context ctx) {
         decide(ctx, BLOSSOM_TARGET, "update_mou", "cid is not authorized to update the Blossom MOU");
-    }
-
-    /**
-     * Check if the cid has "update_vote_config" on BLOSSOM_TARGET. If yes, invoke the updateVoteConfig function.
-     * @param ctx The Fabric context.
-     * @throws ChaincodeException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
-     */
-    public void updateVoteConfig(Context ctx, VoteConfiguration voteConfiguration) {
-        decideAndRespond(ctx, BLOSSOM_TARGET, "update_vote_config", 
-                         "cid is not authorized to update the vote config",
-                         "updateVoteConfig", Value.fromObject(voteConfiguration));
     }
 
     /**
@@ -261,7 +249,7 @@ public class BlossomPDP {
      */
     public static MemoryPolicyStore loadPolicy(Context ctx, UserContext userCtx) {
         byte[] policy = ctx.getStub().getState("policy");
-        if (policy == null) {
+        if (policy.length == 0) {
             throw new ChaincodeException("ngac policy has not been initialized");
         }
 
@@ -323,24 +311,12 @@ public class BlossomPDP {
         }
     }
 
-    private String accountVoteContainer(String account) {
-        return account + " votes";
-    }
-
     private String accountUsersNodeName(String mspid) {
         return mspid + " users";
     }
 
-    private String accountContainerNodeName(String mspid) {
-        return mspid + " account";
-    }
-
     private String accountObjectNodeName(String mspid) {
         return mspid + " target";
-    }
-
-    private String voteUA(String targetMember) {
-        return "vote:" + targetMember + "_UA";
     }
 
     private String voteObj(String targetMember, String voteID) {

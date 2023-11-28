@@ -110,7 +110,7 @@ public class MockChaincodeStub implements ChaincodeStub {
     @Override
     public byte[] getState(String key) {
         if (!ledger.containsKey(key)) {
-            return null;
+            return new byte[]{};
         }
 
         return ledger.get(key).get(0);
@@ -215,10 +215,15 @@ public class MockChaincodeStub implements ChaincodeStub {
     @Override
     public byte[] getPrivateData(String collection, String key) {
         if (!privateData.containsKey(collection)) {
-            return null;
+            return new byte[]{};
         }
 
-        return privateData.get(collection).get(key);
+        Map<String, byte[]> data = privateData.get(collection);
+        if (!data.containsKey(key)) {
+            return new byte[]{};
+        }
+
+        return data.get(key);
     }
 
     @Override

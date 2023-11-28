@@ -65,7 +65,7 @@ public class MOUContract implements ContractInterface {
 
         MOU mou;
         byte[] bytes = ctx.getStub().getState(MOU_KEY);
-        if (bytes == null) {
+        if (bytes.length == 0) {
             mou = new MOU(text, 1, timestamp);
         } else {
             mou = SerializationUtils.deserialize(bytes);
@@ -91,7 +91,7 @@ public class MOUContract implements ContractInterface {
     @Transaction
     public MOU GetMOU(Context ctx) {
         byte[] bytes = ctx.getStub().getState(MOU_KEY);
-        if (bytes == null) {
+        if (bytes.length == 0) {
             throw new ChaincodeException("Blossom MOU has not yet been created");
         }
 
@@ -145,7 +145,7 @@ public class MOUContract implements ContractInterface {
         // check that account exists, if not create it
         Account account;
         byte[] bytes = ctx.getStub().getState(accountKey(accountId));
-        if (bytes == null) {
+        if (bytes.length == 0) {
             account = new Account(accountId, Status.PENDING, version, false);
         } else {
             account = SerializationUtils.deserialize(bytes);

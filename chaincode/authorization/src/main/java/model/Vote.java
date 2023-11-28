@@ -5,6 +5,7 @@ import org.hyperledger.fabric.contract.annotation.DataType;
 import org.hyperledger.fabric.contract.annotation.Property;
 
 import java.io.Serializable;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -56,6 +57,12 @@ public class Vote implements Serializable {
     private int count;
 
     /**
+     * The vote that can vote.
+     */
+    @Property
+    private List<String> voters;
+
+    /**
      * Result of the vote.
      */
     @Property
@@ -64,9 +71,15 @@ public class Vote implements Serializable {
     public Vote() {
     }
 
-    public Vote(@JsonProperty String id, @JsonProperty String initiatingAccountId, @JsonProperty String targetMember,
-                @JsonProperty Status statusChange, @JsonProperty String reason, @JsonProperty Threshold threshold,
-                @JsonProperty int count, @JsonProperty Result result) {
+    public Vote(@JsonProperty String id,
+                @JsonProperty String initiatingAccountId,
+                @JsonProperty String targetMember,
+                @JsonProperty Status statusChange,
+                @JsonProperty String reason,
+                @JsonProperty Threshold threshold,
+                @JsonProperty int count,
+                @JsonProperty List<String> voters,
+                @JsonProperty Result result) {
         this.id = id;
         this.initiatingAccountId = initiatingAccountId;
         this.targetMember = targetMember;
@@ -74,6 +87,7 @@ public class Vote implements Serializable {
         this.reason = reason;
         this.threshold = threshold;
         this.count = count;
+        this.voters = voters;
         this.result = result;
     }
 
@@ -131,6 +145,14 @@ public class Vote implements Serializable {
 
     public void setCount(int count) {
         this.count = count;
+    }
+
+    public List<String> getVoters() {
+        return voters;
+    }
+
+    public void setVoters(List<String> voters) {
+        this.voters = voters;
     }
 
     public Result getResult() {

@@ -1,28 +1,19 @@
 package contract;
 
-import gov.nist.csd.pm.policy.exceptions.PMException;
-import gov.nist.csd.pm.policy.exceptions.UnauthorizedException;
 import mock.MockContext;
 import mock.MockIdentity;
-import model.ATO;
 import model.Account;
 import model.Status;
-import model.VoteConfiguration;
 import org.hyperledger.fabric.shim.ChaincodeException;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.time.Instant;
-import java.util.List;
 
 import static contract.AccountContract.accountKey;
-import static contract.VoteContract.VOTE_CONFIG_KEY;
 import static mock.MockOrgs.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class BootstrapContractTest {
-
-    public static VoteConfiguration TEST_VOTE_CONFIG = new VoteConfiguration(true, true, true, false);
 
     @Test
     void testSuccess() {
@@ -55,18 +46,5 @@ class BootstrapContractTest {
         mockContext.setTxId("123");
         blossomContract.Bootstrap(mockContext);
         assertThrows(ChaincodeException.class, () -> blossomContract.Bootstrap(mockContext));
-    }
-
-    @Test
-    void testBootstrapSetsDefaultVoteConfig() {
-        MockContext mockContext = new MockContext(MockIdentity.ORG1_AO);
-        BootstrapContract bootstrapContract = new BootstrapContract();
-        mockContext.setTimestamp(Instant.now());
-        bootstrapContract.Bootstrap(mockContext);
-        VoteConfiguration actual = new VoteContract().GetVoteConfiguration(mockContext);
-        assertEquals(
-                new VoteConfiguration(true, true, true, false),
-                actual
-        );
     }
 }
