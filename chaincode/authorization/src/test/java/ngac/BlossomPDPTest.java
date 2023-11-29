@@ -9,10 +9,12 @@ import gov.nist.csd.pm.policy.serialization.json.JSONSerializer;
 import mock.MockContext;
 import mock.MockIdentity;
 import model.Status;
+import org.hyperledger.fabric.shim.Chaincode;
 import org.hyperledger.fabric.shim.ChaincodeException;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 
@@ -115,6 +117,13 @@ class BlossomPDPTest {
             ChaincodeException e = assertThrows(ChaincodeException.class, () -> pdp.join(ctx, ORG2_MSP));
             assertEquals("cid is not authorized to join for account Org2MSP", e.getMessage());
         }
+
+        @Test
+        void testUnauthorizedBeforeSignMOU() throws Exception {
+            MockContext ctx = newTestMockContextWithOneAccount(MockIdentity.ORG3_AO);
+            ChaincodeException e = assertThrows(ChaincodeException.class, () -> pdp.join(ctx, ORG3_MSP));
+            assertEquals("account Org3MSP does not exist", e.getMessage());
+        }
     }
 
     @Nested
@@ -200,6 +209,14 @@ class BlossomPDPTest {
             Instant now = Instant.now();
             MockContext ctx = newTestMockContextWithAccountsAndATOs(MockIdentity.ORG2_AO, now);
             updateAccountStatus(ctx, ORG2_MSP, PENDING);
+
+            assertDoesNotThrow(() -> pdp.submitFeedback(ctx, ORG2_MSP));
+        }
+
+        @Test
+        void testFeedbackOnSelfWhenAuthorized() throws Exception {
+            Instant now = Instant.now();
+            MockContext ctx = newTestMockContextWithAccountsAndATOs(MockIdentity.ORG2_AO, now);
 
             assertDoesNotThrow(() -> pdp.submitFeedback(ctx, ORG2_MSP));
         }
@@ -407,11 +424,30 @@ class BlossomPDPTest {
         }
 
         @Test
+        void testADMINMSPUnauthorizedWhenPendingAndTargetOfVote() throws Exception {
+            MockContext ctx = newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
+            updateAccountStatus(ctx, ORG1_MSP, PENDING);
+
+            pdp.initiateVote(ctx, ORG1_MSP);
+
+            ctx.setClientIdentity(MockIdentity.ORG1_AO);
+            ChaincodeException e = assertThrows(
+                    ChaincodeException.class,
+                    () -> pdp.certifyVote(ctx, ORG1_MSP)
+            );
+            assertEquals("cid is not authorized to certify a vote on Org1MSP", e.getMessage());
+        }
+
+        @Test
         void testNotInitiatorUnauthorized() throws Exception {
             MockContext ctx = newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
-            pdp.initiateVote(ctx, ORG2_MSP);
 
-            assertDoesNotThrow(() -> pdp.certifyVote(ctx, ORG2_MSP));
+            ctx.setClientIdentity(MockIdentity.ORG1_AO);
+            pdp.initiateVote(ctx, ORG3_MSP);
+
+            ctx.setClientIdentity(MockIdentity.ORG2_AO);
+            ChaincodeException e = assertThrows(ChaincodeException.class, () -> pdp.certifyVote(ctx, ORG3_MSP));
+            assertEquals("cid is not authorized to certify a vote on Org3MSP", e.getMessage());
         }
 
 
@@ -438,6 +474,16 @@ class BlossomPDPTest {
                     () -> pdp.certifyVote(ctx, ORG3_MSP)
             );
             assertEquals("cid is not authorized to certify a vote on Org3MSP", e.getMessage());
+        }
+
+        @Test
+        void testADMINMSPCanCertifyWhenNoAuthorizedMembersExist() throws Exception {
+            MockContext ctx = newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
+            updateAccountStatus(ctx, ORG1_MSP, PENDING);
+            updateAccountStatus(ctx, ORG2_MSP, PENDING);
+            updateAccountStatus(ctx, ORG3_MSP, PENDING);
+            pdp.initiateVote(ctx, ORG1_MSP);
+            assertDoesNotThrow(() -> pdp.certifyVote(ctx, ORG1_MSP));
         }
     }
 }

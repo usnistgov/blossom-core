@@ -26,8 +26,8 @@ class BootstrapContractTest {
         mockContext.setTimestamp(Instant.now());
         blossomContract.Bootstrap(mockContext);
 
-        assertNotNull(mockContext.getStub().getState("policy"));
-        assertNotNull(mockContext.getStub().getState(accountKey(ORG1_MSP)));
+        assertTrue(mockContext.getStub().getState("policy").length > 0);
+        assertTrue(mockContext.getStub().getState(accountKey(ORG1_MSP)).length > 0);
 
         Account account = new AccountContract().GetAccount(mockContext, ORG1_MSP);
         assertEquals(new Account(ORG1_MSP, Status.AUTHORIZED, 0, true), account);
@@ -46,5 +46,11 @@ class BootstrapContractTest {
         mockContext.setTxId("123");
         blossomContract.Bootstrap(mockContext);
         assertThrows(ChaincodeException.class, () -> blossomContract.Bootstrap(mockContext));
+    }
+
+    @Test
+    void testUnauthorized() {
+        MockContext ctx = new MockContext(MockIdentity.ORG2_AO);
+        assertThrows(ChaincodeException.class, () -> new BootstrapContract().Bootstrap(ctx));
     }
 }

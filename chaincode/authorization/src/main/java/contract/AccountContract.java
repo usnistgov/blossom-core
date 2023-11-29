@@ -33,15 +33,8 @@ import java.util.List;
 )
 public class AccountContract implements ContractInterface {
 
-    /**
-     * Prefix used when writing accounts to the Fabric ledger
-     */
     private static final String ACCOUNT_PREFIX = "account:";
 
-
-    /**
-     * builds the key for writing the account to the ledger
-     */
     public static String accountKey(String accountId) {
         return ACCOUNT_PREFIX + accountId;
     }
@@ -51,9 +44,10 @@ public class AccountContract implements ContractInterface {
     }
 
     /**
-     * Join represents the final step in joining the network. Calling this function will set the member's account status
-     * to PENDING and they will be able to start the ATO process and voting. The member must have already signed the MOU
-     * before joining.
+     * Join signals the members intent to join the information exchange. This function does not have any impact on the
+     * status of the member as that is completed during the voting process before this.
+     *
+     * NGAC: the member must have already been voted as AUTHORIZED in order to join.
      *
      * event:
      *  - name: "Join"
@@ -85,7 +79,7 @@ public class AccountContract implements ContractInterface {
     }
 
     /**
-     * Get all accounts in Blossom.
+     * Get all accounts in Blossom and their statuses.
      *
      * NGAC: none.
      *

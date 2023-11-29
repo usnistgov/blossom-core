@@ -113,6 +113,9 @@ public class MOUContract implements ContractInterface {
      * Sign the provided version of the MOU for the member in the cid. The act of signing the fabric transaction with
      * the provided version represents the signing process. The version must be the most recent.
      *
+     * NGAC: Only users with the Authorizing Official role may call this function. This function will also create the
+     * account in the policy if it doesn't already exist.
+     *
      * event:
      *  - name: "SignMOU"
      *  - payload: a serialized Account object

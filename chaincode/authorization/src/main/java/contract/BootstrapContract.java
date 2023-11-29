@@ -39,9 +39,9 @@ public class BootstrapContract implements ContractInterface {
      * Bootstrap the Blossom authorization chaincode by initializing the NGAC policy. The account identified by the ADMINMSP
      * constant in the policy.pml file will automatically be set to AUTHORIZED. Once additional members are added to the
      * network, those members may vote (using a super majority) to rescind the Blossom Admin's authorized status if deemed
-     * necessary. Only a users from the ADMINMSP defined in policy.pml can call this method. This method can only be called once.
+     * necessary.
      *
-     * NGAC: Only an Authorizing Official from the Blossom Admin member can call this function.
+     * NGAC: Only an Authorizing Official from the ADMINMSP can call this function.
      *
      * @param ctx Chaincode context which stores the requesting CID and exposes world state functions.
      * @throws ChaincodeException If the Bootstrap method has already been called.

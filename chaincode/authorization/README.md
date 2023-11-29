@@ -1,3 +1,20 @@
+# Authorization Chaincode
+
+Chaincode functions to handle Blossom authorization.
+
+## Build Chaincode
+From `blossom-core/chaincode`:
+ ```
+ make clean-auth-cc build-auth-cc
+ ```
+This will package the chaincode in `blossom-core/chaincode/authorization/build/install`. When installing the chaincode
+on a channel, point to this directory.
+
+## Authorization Statuses
+
+- AUTHORIZED
+- PENDING
+- NOT_AUTHORIZED
 
 ## Chaincode Functions
 
@@ -19,39 +36,23 @@
   - SignMOU
   - Join
 - vote
-  - GetVoteConfiguration
-  - UpdateVoteConfiguration
-  - InitiateVote
-  - CertifyVote
-  - AbortVote
+  - InitiateVote 
   - Vote
-  - GetVote
-  - GetVotes
-  - GetOngoingVotes
-  - GetVotesForMember
-  - GetOngoingVoteForMember
+  - CertifyOngoingVote
+  - GetOngoingVote
+  - GetVoteHistory
 
-## Chaincode Invocation
+## Voting System
 
-For Java chaincode, to invoke a function in a contract class, prepend the contract name to the function name. For example `account:GetAccounts` calls the `GetAccounts` function
-of the `account` contract class. Even though the contract classes have different names they are considered part of the same chaincode and therefore operate on the same fabric namespace on the channel.
-
-The contract names are:
-    - account
-    - ato
-    - bootstrap
-    - mou
-    - vote
-
-An example invocation:
-```bash
-peer chaincode query -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com --tls \
---cafile ${PWD}/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem \
--C authorization -n authorization \
---peerAddresses localhost:7051 --tlsRootCertFiles ${PWD}/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt \
--c '{"function":"account:GetAccounts","Args":[]}'
-```
-
+- There can only be one ongoing vote at a time. 
+- If the Blossom Admin is voted to a status other than AUTHORIZED, subsequent votes with any other member as a target will 
+fail until there is a vote to reauthorize the Blossom Admin. 
+- Members cannot initiate a vote on themselves regardless of status, including the Blossom Admin. The only exception is 
+if there are no other authorized members. In this case, the Blossom Admin will be granted temporary privileges to initiate a vote on themselves. Once authorized, they will lose the privileges.
+- Only AUTHORIZED members at the time `InitiateVote` is called can participate in a vote. 
+- Only Blossom Admin and the member that initiated a vote can call `CertifyOngoingVote`. If the Blossom Admin is not authorized,
+they will not be able to certify.
+- Members can vote for themselves.
 
 ## Common Workflows
 ### Bootstrap

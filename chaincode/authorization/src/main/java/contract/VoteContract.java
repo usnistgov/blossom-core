@@ -39,11 +39,9 @@ public class VoteContract implements ContractInterface {
     public static final String ONGOING_VOTE_KEY = "ongoing_vote";
 
     /**
-     * Initiate a vote to change the status of a Blossom member. The account that initiates the vote will be assigned
-     * to the vote initiator role for this vote. This will give them the ability to certify or abort the vote. The ADMINMSP
-     * can also certify or abort any vote but are also subject to the policy changes caused by vote configuration. Votes
-     * on the ADMINMSP require a super majority (> 2/3) to pass, while all other members require a simple majority (> 1/2)
-     * to pass.
+     * Initiate a vote to change the status of a Blossom member. The initiating member and the ADMINMSP will be able
+     * to certify the vote. Only one vote can be ongiong at a time. Votes on the ADMINMSP require a super majority
+     * (> 2/3) to pass, while all other members require a simple majority (> 1/2) to pass.
      *
      * NGAC: Only users with the "Authorizing Official" attribute can initiate a vote. Successfully casting a vote also
      * depends on the vote configuration.
@@ -58,7 +56,7 @@ public class VoteContract implements ContractInterface {
      * @param reason The reason for initiating the vote. Can be null or empty.
      * @throws ChaincodeException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
      * @throws ChaincodeException If the target member does not exist.
-     * @throws ChaincodeException If there is already an ongoing vote for the target member.
+     * @throws ChaincodeException If there is already an ongoing vote.
      */
     @Transaction
     public void InitiateVote(Context ctx, String targetAccountId,
@@ -120,10 +118,10 @@ public class VoteContract implements ContractInterface {
 
     /**
      * Vote as the requesting CID's MSPID for a vote with the given ID and target member. Members can overwrite their
-     * votes as long as the vote has not been certified yet. Votes are stored in each member's implicit data collection.
+     * votes as long as the vote has not been certified yet. How members vote will be available in the world state.
      *
-     * NGAC: Only users with the "Authorizing Official" attribute can vote. Voting ability is subject to the vote configuration
-     * policy.
+     * NGAC: Only users with the "Authorizing Official" attribute can vote. Only authorized members at the time of
+     * initiation are abel to vote.
      *
      * event:
      *  - name: "Vote"
@@ -131,6 +129,7 @@ public class VoteContract implements ContractInterface {
      *
      * @param ctx Fabric context object.
      * @param value The requesting CID's vote. True is "yes" and false is "no".
+     * @throws ChaincodeException If there is no ongoing vote.
      * @throws ChaincodeException If the requesting CID cannot vote.
      */
     @Transaction
@@ -156,10 +155,12 @@ public class VoteContract implements ContractInterface {
      * Certify a vote by checking if the cast ballots lead to a pass or fail. An exception will be thrown if there are not
      * enough votes to pass or fail.
      *
-     * NGAC: Only the vote initiator or blossom admin can certify a vote. The account must be AUTHORIZED to certify.
+     * NGAC: Only the vote initiator or ADMINMSP can certify a vote. The ADMINMSP must be AUTHORIZED to certify.
      *
      * @param ctx Fabric context object.
      * @return true if the vote passed, false if it failed.
+     * @throws ChaincodeException if there is no ongoing vote.
+     * @throws ChaincodeException if there are not enough votes to certify.
      */
     @Transaction
     public boolean CertifyOngoingVote(Context ctx) {
@@ -186,8 +187,7 @@ public class VoteContract implements ContractInterface {
     }
 
     /**
-     * Get a vote with a given ID and target member. The "yes" and "no" tallies as well as how each member voted will
-     * not be returned. Only the total vote count will be returned.
+     * Get the ongoing vote.
      *
      * NGAC: none.
      *

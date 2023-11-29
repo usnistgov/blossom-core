@@ -91,6 +91,17 @@ public class ATOContract implements ContractInterface {
         ctx.getStub().setEvent("UpdateATO", SerializationUtils.serialize(new ATOEvent(accountId)));
     }
 
+    /**
+     * Get teh ATO for the given member. It is not possible to get the history of the ATO since it is stored in the
+     * members implicit private data collection which does not support key history.
+     *
+     * NGAC: CID must be authorized in order to view the ATO of another member. They do not need to be authorized to
+     * see their own ATO.
+     *
+     * @param ctx Fabric context object.
+     * @param accountId The member to get the ATO for.
+     * @return The ATO of the given member.
+     */
     public ATO GetATO(Context ctx, String accountId) {
         new BlossomPDP().readATO(ctx, accountId);
 
@@ -106,12 +117,15 @@ public class ATOContract implements ContractInterface {
      * Submit feedback on a member's ATO. The provided ATO version must match the member's current ATO version to ensure
      * the feedback is happening on the most recent version. The comments are stored in a string.
      *
+     * NGAC: All members can submit feedback on their own ATOs (i.e. respond directly to feedback from others). Only
+     * authorized members can submit feedback to others.
+     *
      * event:
      *  - name: "SubmitFeedback"
      *  - payload: a serialized Account object
      *
      * @param ctx Fabric context object.
-     * @param targetAccountId The org to provide feedback to.
+     * @param targetAccountId The member to provide feedback to.
      * @param atoVersion The target account's ATO version the feedback is addressing.
      * @param comments The comments provided.
      * @throws ChaincodeException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
