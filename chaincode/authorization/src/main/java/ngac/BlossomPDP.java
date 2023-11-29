@@ -34,6 +34,12 @@ public class BlossomPDP {
     private static final String BLOSSOM_ROLE_ATTR = "blossom.role";
     private static final String AUTHORIZING_OFFICIAL = "Authorizing Official";
 
+    private String adminMSP;
+
+    public BlossomPDP() {
+
+    }
+
     /**
      * Get the AdminMSP defined in the policy stored on the ledger.
      *
@@ -41,24 +47,21 @@ public class BlossomPDP {
      * @return The AdminMSP defined in the policy on ledger.
      * @throws ChaincodeException If there is an error retrieving the policy from the ledger.
      */
-    public static String getAdminMSPID(Context ctx) {
-        UserContext userCtx = getUserCtxFromRequest(ctx);
+    public String getADMINMSP(Context ctx) {
+        if (adminMSP != null) {
+            return adminMSP;
+        }
 
+        UserContext userCtx = getUserCtxFromRequest(ctx);
         MemoryPolicyStore memoryPolicyStore = loadPolicy(ctx, userCtx);
-        return getAdminMSPID(memoryPolicyStore);
+
+        return getADMINMSP(memoryPolicyStore);
     }
 
-    /**
-     * Get the AdminMSP defined in the in memory instance of the policy.
-     *
-     * @param policy An in memory policy representation.
-     * @return The AdminMSP value stored in the policy as a PML constant.
-     * @throws ChaincodeException If there is an error getting the AdminMSP value from the policy.
-     */
-    public static String getAdminMSPID(Policy policy) {
+    private String getADMINMSP(Policy policy) {
         try {
-            Value value = policy.userDefinedPML().getConstant("ADMINMSP");
-            return value.getStringValue();
+            adminMSP = policy.userDefinedPML().getConstant("ADMINMSP").getStringValue();
+            return adminMSP;
         } catch (PMException e) {
             throw new ChaincodeException(e);
         }
@@ -180,17 +183,15 @@ public class BlossomPDP {
      * Check if the cid has "initiate_vote" on <account> target. If yes, invoke the initiateVote function.
      *
      * @param ctx          Chaincode context.
-     * @param voteID       The ID of the vote.
      * @param targetMember The target member of the vote.
      *
      * @throws ChaincodeException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
      */
-    public void initiateVote(Context ctx, String voteID, String targetMember) {
+    public void initiateVote(Context ctx, String targetMember) {
         String target = accountObjectNodeName(targetMember);
         decideAndRespond(ctx, target, "initiate_vote", "cid is not authorized to initiate a vote on " + targetMember,
                          "initiateVote",
                          new StringValue(ctx.getClientIdentity().getMSPID()),
-                         new StringValue(voteID),
                          new StringValue(targetMember));
     }
 
@@ -198,12 +199,11 @@ public class BlossomPDP {
      * Check if the cid has "vote" on the vote object.
      *
      * @param ctx Chaincode context.
-     * @param voteID The ID of the vote.
      * @param targetMember The target member of the vote.
      * @throws ChaincodeException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
      */
-    public void vote(Context ctx, String voteID, String targetMember) {
-        decide(ctx, voteObj(targetMember, voteID), "vote",
+    public void vote(Context ctx, String targetMember) {
+        decide(ctx, voteObj(targetMember), "vote",
                "cid is not authorized to vote on " + targetMember);
     }
 
@@ -211,32 +211,13 @@ public class BlossomPDP {
      * Check if the cid has "certify_vote" on the vote object. if yes, invoke the endVote function.
      *
      * @param ctx Chaincode context.
-     * @param voteID The ID of the vote.
      * @param targetMember The target member of the vote.
      * @throws ChaincodeException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
      */
-    public void certifyVote(Context ctx, String voteID, String targetMember) {
-        String target = voteObj(targetMember, voteID);
+    public void certifyVote(Context ctx, String targetMember) {
+        String target = voteObj(targetMember);
         decideAndRespond(ctx, target, "certify_vote", "cid is not authorized to certify a vote on " + targetMember,
-                         "endVote",
-                         new StringValue(voteID),
-                         new StringValue(targetMember));
-    }
-
-    /**
-     * Check if the cid has "abort_vote" on the vote object. if yes, invoke the endVote function.
-     *
-     * @param ctx Chaincode context.
-     * @param voteID The ID of the vote.
-     * @param targetMember The target member of the vote.
-     * @throws ChaincodeException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
-     */
-    public void abortVote(Context ctx, String voteID, String targetMember) {
-        String target = voteObj(targetMember, voteID);
-        decideAndRespond(ctx, target, "abort_vote",
-                         "cid is not authorized to abort a vote on " + targetMember,
-                         "endVote",
-                         new StringValue(voteID),
+                         "certifyVote",
                          new StringValue(targetMember));
     }
 
@@ -319,8 +300,8 @@ public class BlossomPDP {
         return mspid + " target";
     }
 
-    private String voteObj(String targetMember, String voteID) {
-        return targetMember + "-" + voteID + " vote";
+    private String voteObj(String targetMember) {
+        return targetMember + " vote";
     }
 
     private static String getNGACUserName(Context ctx) {
@@ -346,7 +327,7 @@ public class BlossomPDP {
         return new UserContext(getNGACUserName(ctx));
     }
 
-    PolicyReviewer loadPolicyReviewer(Context ctx, PAP policy) {
+    private PolicyReviewer loadPolicyReviewer(Context ctx, PAP policy) {
         String ngacUserName = getNGACUserName(ctx);
         String mspid = ctx.getClientIdentity().getMSPID();
         String role = ctx.getClientIdentity().getAttributeValue(BLOSSOM_ROLE_ATTR);
@@ -363,7 +344,7 @@ public class BlossomPDP {
             policy.graph().createUser(ngacUserName, accountUA, role);
 
             // check if user is blossom admin
-            if (getAdminMSPID(policy).equals(mspid) && role.equals(AUTHORIZING_OFFICIAL)) {
+            if (getADMINMSP(policy).equals(mspid) && role.equals(AUTHORIZING_OFFICIAL)) {
                 policy.graph().assign(ngacUserName, "Blossom Admin");
             }
         } catch (PMException e) {
@@ -388,7 +369,7 @@ public class BlossomPDP {
             policy.graph().createUser(ngacUserName, role);
 
             // a user is a Blossom Admin if 1) they are in the admin msp and 2) they are a Authorizing Official
-            if (getAdminMSPID(policy).equals(mspid) && role.equals(AUTHORIZING_OFFICIAL)) {
+            if (getADMINMSP(policy).equals(mspid) && role.equals(AUTHORIZING_OFFICIAL)) {
                 policy.graph().assign(ngacUserName, "Blossom Admin");
             }
         } catch (PMException e) {

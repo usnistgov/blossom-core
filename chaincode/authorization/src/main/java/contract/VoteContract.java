@@ -11,16 +11,16 @@ import org.hyperledger.fabric.contract.annotation.Contract;
 import org.hyperledger.fabric.contract.annotation.Info;
 import org.hyperledger.fabric.contract.annotation.Transaction;
 import org.hyperledger.fabric.shim.ChaincodeException;
-import org.hyperledger.fabric.shim.ledger.KeyValue;
+import org.hyperledger.fabric.shim.ledger.KeyModification;
 import org.hyperledger.fabric.shim.ledger.QueryResultsIterator;
 
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
-import static contract.AccountContract.accountImplicitDataCollection;
 import static contract.AccountContract.accountKey;
-import static ngac.BlossomPDP.getAdminMSPID;
+import static model.Status.AUTHORIZED;
 
 /**
  * Chaincode functions to support voting on account statuses.
@@ -36,9 +36,7 @@ import static ngac.BlossomPDP.getAdminMSPID;
 public class VoteContract implements ContractInterface {
 
     public static final String VOTE_PREFIX = "vote:";
-    public static final String VOTE_CONFIG_KEY = "voteConfig";
-
-    private BlossomPDP pdp = new BlossomPDP();
+    public static final String ONGOING_VOTE_KEY = "ongoing_vote";
 
     /**
      * Initiate a vote to change the status of a Blossom member. The account that initiates the vote will be assigned
@@ -65,19 +63,23 @@ public class VoteContract implements ContractInterface {
     @Transaction
     public void InitiateVote(Context ctx, String targetAccountId,
                              String statusChange, String reason) {
+        BlossomPDP pdp = new BlossomPDP();
         String initiatorAccountId = ctx.getClientIdentity().getMSPID();
-        String adminmsp = getAdminMSPID(ctx);
-        String txId = ctx.getStub().getTxId();
-        String voteKey = voteKey(txId, targetAccountId);
+        String adminmsp = pdp.getADMINMSP(ctx);
+        String voteId = ctx.getStub().getTxId();
+        String voteKey = voteKey(targetAccountId);
 
-        // check that there is not an ongoing vote for the target member
-        String ongoingVoteID = getOngoingVoteForMember(ctx, targetAccountId);
-        if (ongoingVoteID != null) {
-            throw new ChaincodeException("account " + targetAccountId + " already has an ongoing vote with id=" + ongoingVoteID);
+        // check that there is not an ongoing vote
+        Vote ongoingVote = getOngoingVote(ctx);
+        if (ongoingVote != null) {
+            throw new ChaincodeException("there is an ongoing vote on account " + ongoingVote.getTargetAccountId());
         }
 
+        // check that the target member exists
+        checkTargetMemberExists(ctx, targetAccountId);
+
         // check user can initiate and initiate vote in policy
-        pdp.initiateVote(ctx, txId, targetAccountId);
+        pdp.initiateVote(ctx, targetAccountId);
 
         // validate the vote status change
         Status status = Status.fromString(statusChange);
@@ -92,131 +94,28 @@ public class VoteContract implements ContractInterface {
         List<Account> accounts = new AccountContract().GetAccounts(ctx);
         List<String> voters = new ArrayList<>(List.of(targetAccountId));
         for (Account account : accounts) {
-            if (account.getStatus() != Status.AUTHORIZED || account.getId().equals(targetAccountId)) {
+            if (account.getStatus() != AUTHORIZED || account.getId().equals(targetAccountId)) {
                 continue;
             }
 
             voters.add(account.getId());
-
-            // save ballot in account's IPDC
-            ctx.getStub().putPrivateData(accountImplicitDataCollection(account.getId()), voteKey, new byte[]{});
         }
 
-        Vote vote = new Vote(txId, initiatorAccountId, targetAccountId, status,
-                reason, threshold, 0, voters, Vote.Result.ONGOING);
+        // if there are no authorized voters, only votes on the blossom admin are allowed
+        if (voters.size() == 1 && !targetAccountId.equals(adminmsp)) {
+            throw new ChaincodeException("only votes on the ADMINMSP " + adminmsp + " are allowed when there are no authorized members");
+        }
 
+        Vote vote = new Vote(voteId, initiatorAccountId, targetAccountId, status,
+                             reason, threshold, voters, new HashMap<>(), Vote.Result.ONGOING);
+
+        // add vote and ongoing vote to ws
         byte[] bytes = SerializationUtils.serialize(vote);
         ctx.getStub().putState(voteKey, bytes);
+        ctx.getStub().putStringState(ONGOING_VOTE_KEY, targetAccountId);
 
+        // send event
         ctx.getStub().setEvent("InitiateVote", bytes);
-    }
-
-    /**
-     * Complete an ongoing vote. There are three possible outcomes:
-     *      - Vote passes: There are enough "yes" votes and the target targetMember's status is updated and the vote is closed.
-     *      - Vote fails: There are not enough "yes" votes and the target targetMember's status is unchanged and the vote is closed.
-     *      - Not enough votes to decide: There are not enough "yes" or "no" votes to meet the needed threshold for the vote. The status is unchanged and the vote is still ongoing.
-     *
-     * NGAC: Only the Blossom Admin and vote initiator have the permission to complete a vote. However, in both cases
-     * if the account is pending or unauthorized they will be unable to complete a vote.
-     *
-     * event:
-     *  - name: "CertifyVote"
-     *  - payload: a serialized Vote object
-     *
-     * @param ctx Fabric context object.
-     * @param id The id of the vote to complete.
-     * @param targetMember The target member of the vote.
-     * @return true if the vote passed, false otherwise.
-     * @throws VoteDoesNotExistException If the vote does not exist.
-     * @throws VoteHasAlreadyBeenCompletedException If the vote does not exist.
-     * @throws ChaincodeException If the vote does not have enough votes for a decision.
-     * @throws ChaincodeException If the requesting CID cannot certify the vote.
-     */
-    @Transaction
-    public boolean CertifyVote(Context ctx, String id, String targetMember) {
-        Vote vote = GetVote(ctx, id, targetMember);
-
-        // check that the vote has not been completed
-        if (vote.getResult() != Vote.Result.ONGOING) {
-            throw new VoteHasAlreadyBeenCompletedException(id, targetMember);
-        }
-
-        // check cid can certify vote
-        pdp.certifyVote(ctx, id, targetMember);
-
-        int total = vote.getVoters().size();
-        int yes = 0;
-        int no = 0;
-
-        for (String account : vote.getVoters()) {
-            String collection = getAccountImplicitDataCollection(account);
-            byte[] bytes = ctx.getStub().getPrivateData(collection, voteKey(id, targetMember));
-            String v = new String(bytes);
-            if (v.equals("true")) {
-                yes++;
-            } else if (v.equals("false")){
-                no++;
-            }
-        }
-
-        boolean passed = false;
-        if (Vote.passed(yes, total, vote.getThreshold())) {
-            passed = true;
-            handlePassedVote(ctx, id, targetMember, vote.getStatusChange(), vote);
-            vote.setResult(Vote.Result.PASSED);
-        } else if (Vote.failed(yes, no, total, vote.getThreshold())) {
-            handleFailedVote(ctx, id, targetMember, vote);
-            vote.setResult(Vote.Result.FAILED);
-        } else {
-            throw new ChaincodeException("not enough votes for a result");
-        }
-
-        // update the vote
-        byte[] bytes = SerializationUtils.serialize(vote);
-        ctx.getStub().putState(voteKey(id, targetMember), bytes);
-
-        ctx.getStub().setEvent("CertifyVote", bytes);
-
-        return passed;
-    }
-
-    /**
-     * Abort an ongoing vote. If a vote is aborted, the proposed status change will not take effect. Votes cannot be
-     * deleted if they have already been certified using CertifyVote.
-     *
-     * NGAC: Only an Authorizing Official at the initiating member or the ADMINMSP can abort a vote.
-     *
-     * event:
-     *  - name: "AbortVote"
-     *  - payload: a serialized Vote object
-     *
-     * @param ctx Fabric context object.
-     * @param id The ID of the vote to delete.
-     * @param targetMember The target of the vote.
-     * @throws VoteDoesNotExistException If the vote does not exist.
-     * @throws VoteHasAlreadyBeenCompletedException If the vote has already been completed.
-     * @throws ChaincodeException If the requesting CID cannot delete the vote.
-     */
-    @Transaction
-    public void AbortVote(Context ctx, String id, String targetMember) {
-        Vote vote = GetVote(ctx, id, targetMember);
-
-        // check that the vote has not been completed
-        if (vote.getResult() != Vote.Result.ONGOING) {
-            throw new VoteHasAlreadyBeenCompletedException(id, targetMember);
-        }
-
-        vote.setResult(Vote.Result.ABORTED);
-
-        // check the requesting cid can delete the given vote
-        pdp.abortVote(ctx, id, targetMember);
-
-        // delete vote
-        byte[] bytes = SerializationUtils.serialize(vote);
-        ctx.getStub().putState(voteKey(id, targetMember), bytes);
-
-        ctx.getStub().setEvent("AbortVote", bytes);
     }
 
     /**
@@ -231,39 +130,59 @@ public class VoteContract implements ContractInterface {
      *  - payload: a serialized Vote object
      *
      * @param ctx Fabric context object.
-     * @param id The ID of the vote.
-     * @param targetMember The target of the vote.
      * @param value The requesting CID's vote. True is "yes" and false is "no".
-     * @throws VoteDoesNotExistException If the vote does not exist.
-     * @throws VoteHasAlreadyBeenCompletedException If the vote has already been completed.
      * @throws ChaincodeException If the requesting CID cannot vote.
      */
     @Transaction
-    public void Vote(Context ctx, String id, String targetMember, boolean value) {
-        // get the mspid from the requesting cid and corresponding implicit PDC
-        String mspid = ctx.getClientIdentity().getMSPID();
-        String collection = getAccountImplicitDataCollection(mspid);
-        Vote vote = GetVote(ctx, id, targetMember);
-
-        byte[] bytes = ctx.getStub().getPrivateData(collection, voteKey(id, targetMember));
-        if (bytes.length > 0) {
-            throw new ChaincodeException("already cast vote");
-        }
+    public void Vote(Context ctx, boolean value) {
+        String voterId = ctx.getClientIdentity().getMSPID();
+        Vote vote = GetOngoingVote(ctx);
 
         // check if the cid can vote
-        pdp.vote(ctx, id, targetMember);
+        new BlossomPDP().vote(ctx, vote.getTargetAccountId());
 
         // record the vote
-        String s = String.valueOf(value);
-        ctx.getStub().putPrivateData(collection, voteKey(id, targetMember), s.getBytes(StandardCharsets.UTF_8));
-
-        vote.setCount(vote.getCount()+1);
+        vote.submitVote(voterId, value);
 
         // update vote in ws
-        bytes = SerializationUtils.serialize(vote);
-        ctx.getStub().putState(voteKey(id, targetMember), bytes);
+        byte[] bytes = SerializationUtils.serialize(vote);
+        ctx.getStub().putState(voteKey(vote.getTargetAccountId()), bytes);
 
+        // send event
         ctx.getStub().setEvent("Vote", bytes);
+    }
+
+    /**
+     * Certify a vote by checking if the cast ballots lead to a pass or fail. An exception will be thrown if there are not
+     * enough votes to pass or fail.
+     *
+     * NGAC: Only the vote initiator or blossom admin can certify a vote. The account must be AUTHORIZED to certify.
+     *
+     * @param ctx Fabric context object.
+     * @return true if the vote passed, false if it failed.
+     */
+    @Transaction
+    public boolean CertifyOngoingVote(Context ctx) {
+        Vote ongoingVote = getOngoingVote(ctx);
+        if (ongoingVote == null) {
+            throw new ChaincodeException("there is no ongoing vote");
+        }
+
+        // check that the user can certify the vote
+        new BlossomPDP().certifyVote(ctx, ongoingVote.getTargetAccountId());
+
+        boolean passed;
+        if (ongoingVote.passed()) {
+            passed = true;
+            handlePassedVote(ctx, ongoingVote);
+        } else if (ongoingVote.failed()) {
+            passed = false;
+            handleFailedVote(ctx, ongoingVote);
+        } else {
+            throw new ChaincodeException("not enough votes to certify");
+        }
+
+        return passed;
     }
 
     /**
@@ -273,165 +192,82 @@ public class VoteContract implements ContractInterface {
      * NGAC: none.
      *
      * @param ctx Fabric context object.
-     * @param id The ID of the vote.
-     * @param member The target member.
      * @return The vote with the given ID and target member.
-     * @throws VoteDoesNotExistException If the vote does not exist.
+     * @throws ChaincodeException If there is no ongoing vote.
      */
     @Transaction
-    public Vote GetVote(Context ctx, String id, String member) {
-        byte[] state = ctx.getStub().getState(voteKey(id, member));
-        if (state.length == 0) {
-            throw new VoteDoesNotExistException(id, member);
+    public Vote GetOngoingVote(Context ctx) {
+        Vote ongoingVote = getOngoingVote(ctx);
+        if (ongoingVote == null) {
+            throw new ChaincodeException("there is no ongoing vote");
         }
 
-        return SerializationUtils.deserialize(state);
+        return ongoingVote;
     }
 
     /**
-     * Get all votes. The "yes" and "no" tallies as well as how each member voted will
-     * not be returned. Only the total vote count will be returned.
-     *
-     * NGAC: none.
-     *
+     * Get the history of votes in which the provided member was the target of.
      * @param ctx Fabric context object.
-     * @return A list of all votes.
-     * @throws ChaincodeException If there is an issue with iterating over the votes from the world state.
+     * @param member The target member.
+     * @return a list of Vote objects.
      */
     @Transaction
-    public List<Vote> GetVotes(Context ctx) {
+    public List<Vote> GetVoteHistory(Context ctx, String member) {
         List<Vote> votes = new ArrayList<>();
 
-        try(QueryResultsIterator<KeyValue> stateByRange = ctx.getStub().getStateByRange(VOTE_PREFIX, VOTE_PREFIX)) {
-            for (KeyValue kv : stateByRange) {
-                byte[] value = kv.getValue();
-                votes.add(SerializationUtils.deserialize(value));
-            }
-        } catch (Exception e) {
-            throw new ChaincodeException(e);
+        QueryResultsIterator<KeyModification> history = ctx.getStub().getHistoryForKey(voteKey(member));
+        for (KeyModification next : history) {
+            byte[] value = next.getValue();
+
+            votes.add(SerializationUtils.deserialize(value));
         }
 
         return votes;
     }
 
-    /**
-     * Get all ongoing votes. The "yes" and "no" tallies as well as how each member voted will
-     * not be returned. Only the total vote count will be returned.
-     *
-     * NGAC: none.
-     *
-     * @param ctx Fabric context object.
-     * @return A list of all ongoing votes.
-     * @throws ChaincodeException If there is an issue with iterating over the votes from the world state.
-     */
-    @Transaction
-    public List<Vote> GetOngoingVotes(Context ctx) {
-        List<Vote> votes = new ArrayList<>();
-
-        try(QueryResultsIterator<KeyValue> stateByRange = ctx.getStub().getStateByRange(VOTE_PREFIX, VOTE_PREFIX)) {
-            for (KeyValue kv : stateByRange) {
-                byte[] value = kv.getValue();
-                Vote vote = SerializationUtils.deserialize(value);
-                if (vote.getResult() != Vote.Result.ONGOING) {
-                    continue;
-                }
-
-                votes.add(vote);
-            }
-        } catch (Exception e) {
-            throw new ChaincodeException(e);
+    private Vote getOngoingVote(Context ctx) {
+        // ongoing_vote=target mspid
+        byte[] bytes = ctx.getStub().getState(ONGOING_VOTE_KEY);
+        if (bytes.length == 0) {
+            return null;
         }
 
-        return votes;
+        String targetMember = new String(bytes);
+
+        String voteKey = voteKey(targetMember);
+        bytes = ctx.getStub().getState(voteKey);
+        return SerializationUtils.deserialize(bytes);
     }
 
-    /**
-     * Get all votes for a given member that have ever occurred. The "yes" and "no" tallies as well as how each member voted will
-     * not be returned. Only the total vote count will be returned.
-     *
-     * NGAC: none.
-     *
-     * @param ctx Fabric context object.
-     * @param mspid The MSPID to get all votes for.
-     * @return A list of all votes that have ever occurred for the given member.
-     * @throws ChaincodeException If there is an issue with iterating over the votes from the world state.
-     */
-    @Transaction
-    public List<Vote> GetVotesForMember(Context ctx, String mspid) {
-        checkTargetMemberExists(ctx, mspid);
 
-        List<Vote> votes = new ArrayList<>();
-
-        String key = voteKey("", mspid);
-        try (QueryResultsIterator<KeyValue> stateByRange = ctx.getStub().getStateByRange(key, key)) {
-            for (KeyValue kv : stateByRange) {
-                byte[] value = kv.getValue();
-                votes.add(SerializationUtils.deserialize(value));
-            }
-        } catch (Exception e) {
-            throw new ChaincodeException(e);
-        }
-
-        return votes;
+    private String voteKey(String targetMember) {
+        return VOTE_PREFIX + targetMember;
     }
 
-    /**
-     * Get the ongoing vote for the given member. Throws exception if no ongoing vote is found. The "yes" and "no" tallies
-     * as well as how each member voted will not be returned. Only the total vote count will be returned.
-     *
-     * NGAC: none.
-     *
-     * @param ctx Fabric context object.
-     * @param mspid The MSPID of the target member to get the ongoing vote for.
-     * @return The ongoing vote fot the target member
-     * @throws ChaincodeException If there is no ongoing vote for the given member.
-     */
-    @Transaction
-    public Vote GetOngoingVoteForMember(Context ctx, String mspid) {
-        checkTargetMemberExists(ctx, mspid);
-
-        List<Vote> votes = GetVotesForMember(ctx, mspid);
-        for (Vote vote : votes) {
-            if (vote.getResult() == Vote.Result.ONGOING) {
-                return vote;
-            }
-        }
-
-        throw new ChaincodeException("there is no ongoing vote for member=" + mspid);
-    }
-
-    /**
-     * Builds a key to write to the Fabric ledger.
-     *
-     * VOTE_PREFIX:targetMember:id
-     *
-     */
-    private String voteKey(String id, String targetMember) {
-        return VOTE_PREFIX + (targetMember != null && !targetMember.isEmpty() ? targetMember + ":" : "") + id;
-    }
-
-    private String getAccountImplicitDataCollection(String mspid) {
-        return "_implicit_org_" + mspid;
-    }
-
-    private void handleFailedVote(Context ctx, String id, String targetMember, Vote vote) {
+    private void handleFailedVote(Context ctx, Vote vote) {
         // update the vote
         vote.setResult(Vote.Result.FAILED);
-        ctx.getStub().putState(voteKey(id, targetMember), SerializationUtils.serialize(vote));
+
+        byte[] voteBytes = SerializationUtils.serialize(vote);
+        ctx.getStub().putState(voteKey(vote.getTargetAccountId()), voteBytes);
+        ctx.getStub().delState(ONGOING_VOTE_KEY);
+        ctx.getStub().setEvent("VoteCompleted", voteBytes);
     }
 
-    private void handlePassedVote(Context ctx, String id, String targetMember, Status status, Vote vote) {
-        AccountContract AccountContract = new AccountContract();
+    private void handlePassedVote(Context ctx, Vote vote) {
+        String targetMember = vote.getTargetAccountId();
 
         // update the account
-        Account account = AccountContract.GetAccount(ctx, targetMember);
-        account.setStatus(status);
-
+        Account account = new AccountContract().GetAccount(ctx, targetMember);
+        account.setStatus(vote.getStatusChange());
         ctx.getStub().putState(accountKey(targetMember), SerializationUtils.serialize(account));
 
         // update the vote
         vote.setResult(Vote.Result.PASSED);
-        ctx.getStub().putState(voteKey(id, targetMember), SerializationUtils.serialize(vote));
+        byte[] voteBytes = SerializationUtils.serialize(vote);
+        ctx.getStub().putState(voteKey(targetMember), voteBytes);
+        ctx.getStub().delState(ONGOING_VOTE_KEY);
+        ctx.getStub().setEvent("VoteCompleted", voteBytes);
     }
 
     private void checkTargetMemberExists(Context ctx, String mspid) {
@@ -440,28 +276,4 @@ public class VoteContract implements ContractInterface {
             throw new ChaincodeException("an account with id " + mspid + " does not exist");
         }
     }
-
-    private String getOngoingVoteForMember(Context ctx, String mspid) {
-        try {
-            Vote vote = GetOngoingVoteForMember(ctx, mspid);
-
-            // reaching here means there is an active vote
-            return vote.getId();
-        } catch (ChaincodeException e) {
-            return null;
-        }
-    }
-
-    static class VoteDoesNotExistException extends ChaincodeException {
-        public VoteDoesNotExistException(String id, String member) {
-            super("a vote with id=" + id + " and targetMember=" + member + " does not exist");
-        }
-    }
-
-    static class VoteHasAlreadyBeenCompletedException extends ChaincodeException {
-        public VoteHasAlreadyBeenCompletedException(String id, String member) {
-            super("a vote with id=" + id + " and targetMember=" + member + " has already been completed");
-        }
-    }
-
 }

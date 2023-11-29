@@ -3,6 +3,7 @@ package contract;
 import contract.event.SignMOUEvent;
 import gov.nist.csd.pm.policy.exceptions.PMException;
 import mock.MockContext;
+import mock.MockContextUtil;
 import mock.MockEvent;
 import mock.MockIdentity;
 import model.Account;
@@ -16,7 +17,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
 
-import static contract.MockContextUtil.updateAccountStatus;
+import static mock.MockContextUtil.updateAccountStatus;
 import static mock.MockOrgs.*;
 import static model.Status.AUTHORIZED;
 import static model.Status.PENDING;
@@ -86,7 +87,7 @@ class MOUContractTest {
         }
 
         @Test
-        void testNotYetCreated() throws PMException, IOException {
+        void testNotYetCreated() {
             MockContext mockContext = new MockContext(MockIdentity.ORG1_AO);
             BootstrapContract bootstrapContract = new BootstrapContract();
             mockContext.setTimestamp(Instant.now());

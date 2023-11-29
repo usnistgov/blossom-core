@@ -50,8 +50,6 @@ public class AccountContract implements ContractInterface {
         return "_implicit_org_" + accountId;
     }
 
-    private BlossomPDP pdp = new BlossomPDP();
-
     /**
      * Join represents the final step in joining the network. Calling this function will set the member's account status
      * to PENDING and they will be able to start the ATO process and voting. The member must have already signed the MOU
@@ -70,7 +68,7 @@ public class AccountContract implements ContractInterface {
     public void Join(Context ctx) {
         String accountId = ctx.getClientIdentity().getMSPID();
 
-        pdp.join(ctx, accountId);
+        new BlossomPDP().join(ctx, accountId);
 
         Account account = new AccountContract().GetAccount(ctx, accountId);
         if (account.isJoined()) {

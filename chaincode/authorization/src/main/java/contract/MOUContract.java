@@ -34,15 +34,7 @@ import static contract.AccountContract.accountKey;
 )
 public class MOUContract implements ContractInterface {
 
-    /**
-     * key used to identify the MOU text on the ledger
-     */
     private static final String MOU_KEY = "mou";
-
-    /**
-     * BlossomPDP object to check privileges in NGAC system
-     */
-    private BlossomPDP pdp = new BlossomPDP();
 
     /**
      * Update the Blossom MOU.
@@ -59,7 +51,7 @@ public class MOUContract implements ContractInterface {
      */
     @Transaction
     public void UpdateMOU(Context ctx, String text) throws PMException {
-        pdp.updateMOU(ctx);
+        new BlossomPDP().updateMOU(ctx);
 
         String timestamp = ctx.getStub().getTxTimestamp().toString();
 
@@ -132,7 +124,7 @@ public class MOUContract implements ContractInterface {
      */
     @Transaction
     public void SignMOU(Context ctx, int version) {
-        pdp.signMOU(ctx);
+        new BlossomPDP().signMOU(ctx);
 
         MOU mou = GetMOU(ctx);
 

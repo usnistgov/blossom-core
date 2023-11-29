@@ -4,6 +4,7 @@ import contract.event.ATOEvent;
 import contract.event.SubmitFeedbackEvent;
 import gov.nist.csd.pm.policy.exceptions.PMException;
 import mock.MockContext;
+import mock.MockContextUtil;
 import mock.MockEvent;
 import mock.MockIdentity;
 import model.ATO;
@@ -19,7 +20,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
-import static contract.MockContextUtil.*;
+import static mock.MockContextUtil.*;
 import static mock.MockOrgs.*;
 import static model.Status.AUTHORIZED;
 import static model.Status.PENDING;
@@ -34,7 +35,7 @@ public class ATOContractTest {
 
         @Test
         void testSuccess() throws Exception {
-            MockContext mockCtx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
+            MockContext mockCtx = newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
 
             Instant now = Instant.now();
             mockCtx.setTimestamp(now);
@@ -58,7 +59,7 @@ public class ATOContractTest {
 
         @Test
         void testEvent() throws Exception {
-            MockContext mockCtx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
+            MockContext mockCtx = newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
 
             Instant now = Instant.now();
             mockCtx.setTimestamp(now);
@@ -74,7 +75,7 @@ public class ATOContractTest {
 
         @Test
         void testUnauthorized() throws Exception {
-            MockContext mockCtx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG2_NON_AO);
+            MockContext mockCtx = newTestMockContextWithAccounts(MockIdentity.ORG2_NON_AO);
 
             ChaincodeException e =
                     assertThrows(ChaincodeException.class, () -> contract.CreateATO(mockCtx, "memo", "artifacts"));
@@ -119,7 +120,7 @@ public class ATOContractTest {
     class UpdateATOTest {
         @Test
         void testSuccess() throws Exception {
-            MockContext mockCtx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
+            MockContext mockCtx = newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
 
             Instant now = Instant.now();
             mockCtx.setTimestamp(now);
@@ -147,7 +148,7 @@ public class ATOContractTest {
 
         @Test
         void testUnauthorized() throws Exception {
-            MockContext mockCtx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
+            MockContext mockCtx = newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
 
             Instant now = Instant.now();
             mockCtx.setTimestamp(now);
@@ -172,7 +173,7 @@ public class ATOContractTest {
 
         @Test
         void testEvent() throws Exception {
-            MockContext mockCtx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
+            MockContext mockCtx = newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
 
             Instant now = Instant.now();
             mockCtx.setTimestamp(now);
@@ -255,7 +256,7 @@ public class ATOContractTest {
 
         @Test
         void testSuccess() throws Exception {
-            MockContext mockCtx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
+            MockContext mockCtx = newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
 
             updateAccountStatus(mockCtx, ORG2_MSP, AUTHORIZED);
             updateAccountStatus(mockCtx, ORG3_MSP, AUTHORIZED);
@@ -289,7 +290,7 @@ public class ATOContractTest {
 
         @Test
         void testEvent() throws Exception {
-            MockContext mockCtx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
+            MockContext mockCtx = newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
 
             updateAccountStatus(mockCtx, ORG2_MSP, AUTHORIZED);
             updateAccountStatus(mockCtx, ORG3_MSP, AUTHORIZED);
@@ -314,7 +315,7 @@ public class ATOContractTest {
 
         @Test
         void testCreateATOResetsFeedback() throws Exception {
-            MockContext mockCtx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
+            MockContext mockCtx = newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
 
             updateAccountStatus(mockCtx, ORG2_MSP, AUTHORIZED);
             updateAccountStatus(mockCtx, ORG3_MSP, AUTHORIZED);
@@ -367,7 +368,7 @@ public class ATOContractTest {
 
         @Test
         void testUnauthorized() throws Exception {
-            MockContext mockCtx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
+            MockContext mockCtx = newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
 
             Instant now = Instant.now();
             mockCtx.setTimestamp(now);
@@ -383,7 +384,7 @@ public class ATOContractTest {
 
         @Test
         void testFeedbackOnOutdatedATOVersion() throws Exception {
-            MockContext mockCtx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
+            MockContext mockCtx = newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
 
             Instant now = Instant.now();
             mockCtx.setTimestamp(now);

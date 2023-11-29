@@ -6,6 +6,7 @@ import org.hyperledger.fabric.contract.annotation.Property;
 
 import java.io.Serializable;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -30,7 +31,7 @@ public class Vote implements Serializable {
      * The target member of the vote.
      */
     @Property
-    private String targetMember;
+    private String targetAccountId;
 
     /**
      * The intended status change if the vote passes.
@@ -51,16 +52,15 @@ public class Vote implements Serializable {
     private Threshold threshold;
 
     /**
-     * The current number of members that have cast their vote.
-     */
-    @Property
-    private int count;
-
-    /**
-     * The vote that can vote.
+     * The accounts that can vote.
      */
     @Property
     private List<String> voters;
+
+    /**
+     * A record of the votes already cast.
+     */
+    private Map<String, Boolean> submittedVotes;
 
     /**
      * Result of the vote.
@@ -73,21 +73,21 @@ public class Vote implements Serializable {
 
     public Vote(@JsonProperty String id,
                 @JsonProperty String initiatingAccountId,
-                @JsonProperty String targetMember,
+                @JsonProperty String targetAccountId,
                 @JsonProperty Status statusChange,
                 @JsonProperty String reason,
                 @JsonProperty Threshold threshold,
-                @JsonProperty int count,
                 @JsonProperty List<String> voters,
+                @JsonProperty Map<String, Boolean> submittedVotes,
                 @JsonProperty Result result) {
         this.id = id;
         this.initiatingAccountId = initiatingAccountId;
-        this.targetMember = targetMember;
+        this.targetAccountId = targetAccountId;
         this.statusChange = statusChange;
         this.reason = reason;
         this.threshold = threshold;
-        this.count = count;
         this.voters = voters;
+        this.submittedVotes = submittedVotes;
         this.result = result;
     }
 
@@ -107,12 +107,12 @@ public class Vote implements Serializable {
         this.initiatingAccountId = initiatingAccountId;
     }
 
-    public String getTargetMember() {
-        return targetMember;
+    public String getTargetAccountId() {
+        return targetAccountId;
     }
 
-    public void setTargetMember(String targetMember) {
-        this.targetMember = targetMember;
+    public void setTargetAccountId(String targetAccountId) {
+        this.targetAccountId = targetAccountId;
     }
 
     public Status getStatusChange() {
@@ -139,20 +139,24 @@ public class Vote implements Serializable {
         this.threshold = threshold;
     }
 
-    public int getCount() {
-        return count;
-    }
-
-    public void setCount(int count) {
-        this.count = count;
-    }
-
     public List<String> getVoters() {
         return voters;
     }
 
     public void setVoters(List<String> voters) {
         this.voters = voters;
+    }
+
+    public Map<String, Boolean> getSubmittedVotes() {
+        return submittedVotes;
+    }
+
+    public void setSubmittedVotes(Map<String, Boolean> submittedVotes) {
+        this.submittedVotes = submittedVotes;
+    }
+
+    public void submitVote(String accountId, boolean value) {
+        this.submittedVotes.put(accountId, value);
     }
 
     public Result getResult() {
@@ -163,12 +167,17 @@ public class Vote implements Serializable {
         this.result = result;
     }
 
-    public static boolean passed(int yes, int total, Threshold threshold) {
+    public boolean passed() {
+        int total = voters.size();
+        int yes = calcNumYesVotes();
+
         return ((double) yes / total) > threshold.value;
     }
 
-    public static boolean failed(int yes, int no, int total, Threshold threshold) {
-        int numVotes = yes + no;
+    public boolean failed() {
+        int total = voters.size();
+        int numVotes = submittedVotes.size();
+        int yes = calcNumYesVotes();
 
         boolean isMajority = (double) yes / total > threshold.value;
         boolean majorityPossible = (double) (total-numVotes+yes)/total > threshold.value;
@@ -176,29 +185,67 @@ public class Vote implements Serializable {
         return !isMajority && !majorityPossible;
     }
 
+    private int calcNumYesVotes() {
+        int yes = 0;
+        for (Boolean vote : submittedVotes.values()) {
+            if (vote) {
+                yes++;
+            }
+        }
+
+        return yes;
+    }
+
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
         Vote vote = (Vote) o;
-        return count == vote.count && Objects.equals(id, vote.id) && Objects.equals(initiatingAccountId, vote.initiatingAccountId) && Objects.equals(targetMember, vote.targetMember) && statusChange == vote.statusChange && Objects.equals(reason, vote.reason) && threshold == vote.threshold && result == vote.result;
+        return Objects.equals(id, vote.id) && Objects.equals(
+                initiatingAccountId,
+                vote.initiatingAccountId
+        ) && Objects.equals(
+                targetAccountId,
+                vote.targetAccountId
+        ) && statusChange == vote.statusChange && Objects.equals(
+                reason,
+                vote.reason
+        ) && threshold == vote.threshold && Objects.equals(voters, vote.voters) && Objects.equals(
+                submittedVotes,
+                vote.submittedVotes
+        ) && result == vote.result;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, initiatingAccountId, targetMember, statusChange, reason, threshold, count, result);
+        return Objects.hash(
+                id,
+                initiatingAccountId,
+                targetAccountId,
+                statusChange,
+                reason,
+                threshold,
+                voters,
+                submittedVotes,
+                result
+        );
     }
 
     @Override
     public String toString() {
         return "Vote{" +
                 "id='" + id + '\'' +
-                ", initiatingMSPID='" + initiatingAccountId + '\'' +
-                ", targetMember='" + targetMember + '\'' +
+                ", initiatingAccountId='" + initiatingAccountId + '\'' +
+                ", targetAccountId='" + targetAccountId + '\'' +
                 ", statusChange=" + statusChange +
                 ", reason='" + reason + '\'' +
                 ", threshold=" + threshold +
-                ", count=" + count +
+                ", voters=" + voters +
+                ", submittedVotes=" + submittedVotes +
                 ", result=" + result +
                 '}';
     }

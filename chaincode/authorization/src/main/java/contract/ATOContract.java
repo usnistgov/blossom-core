@@ -25,9 +25,7 @@ import static contract.AccountContract.accountImplicitDataCollection;
         )
 )
 public class ATOContract implements ContractInterface {
-
-    private BlossomPDP pdp = new BlossomPDP();
-
+    
     public static String atoKey(String account) {
         return "ato:" + account;
     }
@@ -49,7 +47,7 @@ public class ATOContract implements ContractInterface {
         String accountId = ctx.getClientIdentity().getMSPID();
 
         // check the requesting cid can write an ATO
-        pdp.writeATO(ctx, accountId);
+        new BlossomPDP().writeATO(ctx, accountId);
 
         ATO ato = ATO.createFromContext(ctx, memo, artifacts);
 
@@ -79,7 +77,7 @@ public class ATOContract implements ContractInterface {
         String accountId = ctx.getClientIdentity().getMSPID();
 
         // check the requesting cid can write an ATO
-        pdp.writeATO(ctx, accountId);
+        new BlossomPDP().writeATO(ctx, accountId);
 
         // deserialize the account object from the state and update the ATO value
         ATO ato = GetATO(ctx, accountId);
@@ -94,7 +92,7 @@ public class ATOContract implements ContractInterface {
     }
 
     public ATO GetATO(Context ctx, String accountId) {
-        pdp.readATO(ctx, accountId);
+        new BlossomPDP().readATO(ctx, accountId);
 
         byte[] atoBytes = ctx.getStub().getPrivateData(accountImplicitDataCollection(accountId), atoKey(accountId));
         if (atoBytes.length == 0) {
@@ -134,7 +132,7 @@ public class ATOContract implements ContractInterface {
         }
 
         // check that cid can submit feedback
-        pdp.submitFeedback(ctx, targetAccountId);
+        new BlossomPDP().submitFeedback(ctx, targetAccountId);
 
         Feedback feedback = new Feedback(atoVersion, accountId, comments);
         targetATO.addFeedback(feedback);

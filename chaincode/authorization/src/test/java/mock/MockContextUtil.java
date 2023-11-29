@@ -1,5 +1,9 @@
-package contract;
+package mock;
 
+import contract.ATOContract;
+import contract.AccountContract;
+import contract.BootstrapContract;
+import contract.MOUContract;
 import gov.nist.csd.pm.pap.PAP;
 import gov.nist.csd.pm.pap.memory.MemoryPolicyStore;
 import gov.nist.csd.pm.policy.exceptions.PMException;

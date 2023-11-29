@@ -2,6 +2,7 @@ package contract;
 
 import gov.nist.csd.pm.policy.exceptions.PMException;
 import mock.MockContext;
+import mock.MockContextUtil;
 import mock.MockEvent;
 import mock.MockIdentity;
 import model.*;
@@ -13,7 +14,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
 
-import static contract.MockContextUtil.*;
+import static mock.MockContextUtil.*;
 import static mock.MockOrgs.*;
 import static model.Status.*;
 import static org.junit.jupiter.api.Assertions.*;

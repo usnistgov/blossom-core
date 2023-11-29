@@ -135,7 +135,7 @@ public class MockChaincodeStub implements ChaincodeStub {
 
     @Override
     public void delState(String key) {
-        putState(key, null);
+        ledger.remove(key);
     }
 
     @Override

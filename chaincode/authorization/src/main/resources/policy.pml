@@ -2,18 +2,16 @@ const ADMINMSP = "Org1MSP"
 
 set resource access rights [
     "bootstrap",
-    "update_vote_config",
     "update_mou",
     "get_mou",
     "sign_mou",
     "join",
     "write_ato",
+    "read_ato",
+    "submit_feedback",
     "initiate_vote",
     "vote",
-    "abort_vote",
     "certify_vote",
-    "submit_feedback",
-    "read_ato",
     "join"
 ]
 
@@ -31,11 +29,11 @@ create pc "RBAC" {
     }
 
     associations {
-        "Blossom Admin"         and "RBAC/blossom_target"   with ["bootstrap", "update_mou", "update_vote_config"]
+        "Blossom Admin"         and "RBAC/blossom_target"   with ["bootstrap", "update_mou"]
         // this association is with the blossom target because these permissions are never lost
         // association directly with the OA applies the association to all policy classes the OA is contained in
         "Authorizing Official"  and "blossom_target"        with ["get_mou", "sign_mou", "join"]
-        "Authorizing Official"  and "RBAC/votes"            with ["vote", "certify_vote", "abort_vote", "read_ato"]
+        "Authorizing Official"  and "RBAC/votes"            with ["vote", "certify_vote", "initiate_vote"]
         "Authorizing Official"  and "RBAC/accounts"         with ["initiate_vote", "submit_feedback", "read_ato", "join"]
     }
 }
@@ -43,10 +41,9 @@ create pc "RBAC" {
 // status policy
 create pc "Status" {
     user attributes {
-        "statuses"
-            "authorized"
-            "pending"
-                "unauthorized"
+        "authorized"
+        "pending"
+            "unauthorized"
     }
 
     object attributes {
@@ -60,6 +57,7 @@ create pc "Status" {
         "authorized"    and "Status/blossom_target" with ["*r"]
         "authorized"    and "Status/accounts"       with ["*r"]
         "authorized"    and "Status/votes"          with ["*r"]
+        "pending"       and "Status/accounts"       with ["submit_feedback", "read_ato", "write_ato"]
     }
 }
 
@@ -70,7 +68,7 @@ create pc "Votes" {
 
     associations {
         "Blossom Admin"         and "all votes" with ["certify_vote"]
-        "Authorizing Official"  and "all votes" with ["vote"]
+        "Authorizing Official"  and "all votes" with ["vote", "initiate_vote"]
     }
 }
 
@@ -78,38 +76,24 @@ create pc "Votes" {
 signMOU(ADMINMSP)
 updateAccountStatus(ADMINMSP, "AUTHORIZED")
 
-function initiateVote(string initiator, string voteID, string targetMember) {
+function initiateVote(string initiator, string targetMember) {
     initiatorUsers  := accountUsersNodeName(initiator)
-    voteua          := targetMember + "-" + voteID + " initiator"
-    voteoa          := targetMember + "-" + voteID + " vote attr"
-    voteobj         := targetMember + "-" + voteID + " vote"
-
-    create ua voteua  assign to ["Votes"]
-    create oa voteoa  assign to ["all votes"]
-    create o  voteobj assign to ["RBAC/votes", "Status/votes", voteoa]
-
-    associate voteua and voteoa with ["abort_vote", "certify_vote"]
+    voteua          := voteInitiatorAttr(targetMember)
 
     assign initiatorUsers to [voteua]
 }
 
-function endVote(string voteID, string targetMember) {
-    voteua  := targetMember + "-" + voteID + " initiator"
-    voteoa  := targetMember + "-" + voteID + " vote attr"
-    voteobj := targetMember + "-" + voteID + " vote"
+function certifyVote(string targetMember) {
+    voteua  := voteInitiatorAttr(targetMember)
 
     foreach child in getChildren(voteua) {
         deassign child from [voteua]
     }
-
-    delete ua voteua
-    delete o  voteobj
-    delete oa voteoa
 }
 
-function updateAccountStatus(string accountID, string status) {
-    accountUA := accountUsersNodeName(accountID)
-    accountOA := accountAttributeNodeName(accountID)
+function updateAccountStatus(string accountId, string status) {
+    accountUA := accountUsersNodeName(accountId)
+    accountOA := accountAttributeNodeName(accountId)
 
     if status == "AUTHORIZED" {
         assign      accountUA to    ["authorized"]
@@ -123,14 +107,35 @@ function updateAccountStatus(string accountID, string status) {
         deassign    accountUA from  ["authorized", "unauthorized"]
 
         delete prohibition accountDenyLabel(accountUA)
-        denyPendingAccountsOnAccounts(accountUA, accountOA)
+        createAccountDeny(accountUA, accountOA)
     } else {
         assign      accountUA to    ["unauthorized"]
         deassign    accountUA from  ["authorized", "pending"]
 
         delete prohibition accountDenyLabel(accountUA)
-        denyPendingAccountsOnAccounts(accountUA, accountOA)
+        createAccountDeny(accountUA, accountOA)
     }
+
+    // if there are no authorized accounts, grant the ADMINMSP "initiate_vote" on themselves
+    accountUA = accountUsersNodeName(ADMINMSP)
+    if noAuthorizedAccounts() {
+        associate accountUA and "Status/accounts" with ["initiate_vote"]
+        delete prohibition initiateVoteDenyLabel(accountUA)
+    } else {
+        accountOA = accountAttributeNodeName(ADMINMSP)
+
+        dissociate accountUA and ["Status/accounts"]
+        delete prohibition initiateVoteDenyLabel(accountUA)
+        createInitiateVoteDeny(accountUA, accountOA)
+    }
+}
+
+function noAuthorizedAccounts() bool {
+    foreach x in getChildren("authorized") {
+        return false
+    }
+
+    return true
 }
 
 function signMOU(string accountId) {
@@ -149,14 +154,44 @@ function signMOU(string accountId) {
 
     associate accountUA and accountOA with ["write_ato", "submit_feedback", "read_ato"]
 
-    denyPendingAccountsOnAccounts(accountUA, accountOA)
+    // create vote attr and object for this account
+    voteua  := voteInitiatorAttr(accountId)
+    voteoa  := voteObjAttr(accountId)
+    voteobj := accountId + " vote"
+
+    create ua voteua  assign to ["Votes"]
+    create oa voteoa  assign to ["RBAC/votes", "Status/votes", "all votes"]
+    create o  voteobj assign to [voteoa]
+
+    associate accountUA and voteoa with ["vote"]
+    associate voteua    and voteoa with ["certify_vote"]
+
+    createAccountDeny(accountUA, accountOA)
+    createInitiateVoteDeny(accountUA, accountOA)
 }
 
-function denyPendingAccountsOnAccounts(string accountUA, string accountOA) {
+// account deny happens only when not authorized
+function createAccountDeny(string accountUA, string accountOA) {
     create prohibition accountDenyLabel(accountUA)
     deny user attribute accountUA
-    access rights ["initiate_vote", "submit_feedback", "read_ato"]
+    access rights ["submit_feedback", "read_ato"]
     on intersection of ["Status/accounts", !accountOA]
+}
+
+// initiate vote deny happens all the time except for the ADMINMSP when there are no authorized users
+function createInitiateVoteDeny(string accountUA, string accountOA) {
+    create prohibition initiateVoteDenyLabel(accountUA)
+    deny user attribute accountUA
+    access rights ["initiate_vote"]
+    on intersection of ["Status/accounts", accountOA]
+}
+
+function voteObjAttr(string account) string {
+    return account + " vote attr"
+}
+
+function voteInitiatorAttr(string account) string {
+    return account + " initiator"
 }
 
 function accountUsersNodeName(string account) string {
@@ -172,5 +207,9 @@ function accountObjectNodeName(string account) string {
 }
 
 function accountDenyLabel(string accountUA) string {
-    return "deny " + accountUA + " initiate_vote, submit_feedback, read_ato except on self"
+    return "deny " + accountUA + " submit_feedback, read_ato except on self"
+}
+
+function initiateVoteDenyLabel(string accountUA) string {
+    return "deny " + accountUA + " initiate_vote on self"
 }

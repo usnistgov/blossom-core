@@ -21,7 +21,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 import static contract.AccountContract.accountKey;
-import static contract.VoteContract.VOTE_CONFIG_KEY;
 
 /**
  * Chaincode functions to bootstrap the Blossom system.
