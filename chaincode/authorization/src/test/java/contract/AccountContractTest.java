@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 import static mock.MockContextUtil.*;
 import static mock.MockOrgs.*;
@@ -112,12 +113,11 @@ class AccountContractTest {
             Instant now = Instant.now();
             mockCtx.setTimestamp(now);
             mockCtx.setTxId("123");
-            atoContract.CreateATO(mockCtx, "memo", "artifacts");
+            mockCtx.setATOTransientData("memo", "artifacts");
+            atoContract.CreateATO(mockCtx);
 
             mockCtx.setClientIdentity(MockIdentity.ORG3_AO);
             updateAccountStatus(mockCtx, ORG3_MSP, AUTHORIZED);
-            atoContract.SubmitFeedback(mockCtx, "Org2MSP", 1, "comment1");
-            atoContract.SubmitFeedback(mockCtx, "Org2MSP", 1, "comment2");
 
             Account account = new AccountContract().GetAccount(mockCtx, "Org2MSP");
             assertEquals(

@@ -42,6 +42,28 @@ on a channel, point to this directory.
   - GetOngoingVote
   - GetVoteHistory
 
+## ATO and Feedback Transient Data
+
+The inputs for `CreateATO`, `UpdateATO` and `SubmitFeedback` in the `ATOContract` must be embedded in the transient data field of the request.
+This will ensure the inputs are not attached to the transaction allowing unauthorized members from reading them.
+ 
+### `CreateATO` and `UpdateATO`
+```json
+{
+  "memo": "memo text", 
+  "artifacts": "artifacts text"
+}
+```
+
+### `SubmitFeedback`
+```json
+{
+  "targetAccountId": "target id", 
+  "atoVersion": "ato version #", 
+  "comments": "comments text"
+}
+```
+
 ## Voting System
 
 - There can only be one ongoing vote at a time. 

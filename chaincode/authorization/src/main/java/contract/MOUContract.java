@@ -124,6 +124,7 @@ public class MOUContract implements ContractInterface {
      * @param version The version of the MOU the cid is signing.
      * @throws ChaincodeException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
      * @throws ChaincodeException If the version being signed is not the same as the latest version.
+     * @throws ChaincodeException If the account has already signed the provided MOU version.
      */
     @Transaction
     public void SignMOU(Context ctx, int version) {
@@ -144,6 +145,10 @@ public class MOUContract implements ContractInterface {
             account = new Account(accountId, Status.PENDING, version, false);
         } else {
             account = SerializationUtils.deserialize(bytes);
+
+            if (account.getMouVersion() == version) {
+                throw new ChaincodeException(accountId + " has already signed MOU version " + version);
+            }
         }
 
         account.setMouVersion(version);

@@ -10,6 +10,8 @@ import org.hyperledger.fabric.shim.ChaincodeStub;
 import org.hyperledger.fabric.shim.ledger.*;
 import org.mockito.Mock;
 
+import java.io.Serializable;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.*;
 
@@ -47,8 +49,11 @@ public class MockChaincodeStub implements ChaincodeStub {
         this.creator = creator;
     }
 
-    public void setTransientData(Map<String, byte[]> transientData) {
-        this.transientData = transientData;
+    public void setTransientData(Map<String, String> transientData) {
+        this.transientData.clear();
+        for (Map.Entry<String, String> e : transientData.entrySet()){
+            this.transientData.put(e.getKey(), e.getValue().getBytes(StandardCharsets.UTF_8));
+        }
     }
 
     public void setTimestamp(Instant instant) {

@@ -196,5 +196,16 @@ class MOUContractTest {
             SignMOUEvent event = SerializationUtils.deserialize(mockEvent.getPayload());
             assertEquals(new SignMOUEvent(ORG2_MSP, 1), event);
         }
+
+        @Test
+        void testSigningSameVersionTwiceThrowsException() throws Exception {
+            MockContext mockCtx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
+            ChaincodeException e = assertThrows(
+                    ChaincodeException.class,
+                    () -> contract.SignMOU(mockCtx, 1)
+            );
+            assertEquals("Org2MSP has already signed MOU version 1", e.getMessage());
+        }
+
     }
 }

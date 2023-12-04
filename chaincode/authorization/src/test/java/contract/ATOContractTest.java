@@ -40,7 +40,8 @@ public class ATOContractTest {
             Instant now = Instant.now();
             mockCtx.setTimestamp(now);
             mockCtx.setTxId("123");
-            contract.CreateATO(mockCtx, "memo", "artifacts");
+            mockCtx.setATOTransientData("memo", "artifacts");
+            contract.CreateATO(mockCtx);
 
             ATO ato = contract.GetATO(mockCtx, ORG2_MSP);
             assertEquals(
@@ -64,7 +65,8 @@ public class ATOContractTest {
             Instant now = Instant.now();
             mockCtx.setTimestamp(now);
             mockCtx.setTxId("123");
-            contract.CreateATO(mockCtx, "memo", "artifacts");
+            mockCtx.setATOTransientData("memo", "artifacts");
+            contract.CreateATO(mockCtx);
 
             MockEvent actual = mockCtx.getStub().getMockEvent();
             assertEquals(
@@ -77,16 +79,18 @@ public class ATOContractTest {
         void testUnauthorized() throws Exception {
             MockContext mockCtx = newTestMockContextWithAccounts(MockIdentity.ORG2_NON_AO);
 
+            mockCtx.setATOTransientData("memo", "artifacts");
             ChaincodeException e =
-                    assertThrows(ChaincodeException.class, () -> contract.CreateATO(mockCtx, "memo", "artifacts"));
+                    assertThrows(ChaincodeException.class, () -> contract.CreateATO(mockCtx));
             assertEquals("unknown user role: System Administrator", e.getMessage());
         }
 
         @Test
         void testBeforeJoinThrowsException() throws Exception {
             MockContext mockCtx = newTestMockContextWithOneAccount(MockIdentity.ORG3_AO);
+            mockCtx.setATOTransientData("memo", "artifacts");
             ChaincodeException e = assertThrows(
-                    ChaincodeException.class, () -> contract.CreateATO(mockCtx, "memo", "artifacts")
+                    ChaincodeException.class, () -> contract.CreateATO(mockCtx)
             );
             assertEquals("account Org3MSP does not exist", e.getMessage());
         }
@@ -99,7 +103,8 @@ public class ATOContractTest {
             ctx.setTxId("123");
             ctx.setTimestamp(now);
 
-            contract.CreateATO(ctx, "memo", "artifacts");
+            ctx.setATOTransientData("memo", "artifacts");
+            contract.CreateATO(ctx);
             ATO ato = contract.GetATO(ctx, ORG1_MSP);
             assertEquals(
                     new ATO(
@@ -114,6 +119,32 @@ public class ATOContractTest {
                     ato
             );
         }
+
+        @Test
+        void testWhenPending() throws PMException, IOException {
+            MockContext ctx = newTestContext(MockIdentity.ORG2_AO);
+            new MOUContract().SignMOU(ctx, 1);
+            ctx.setATOTransientData("memo", "artifacts");
+            assertDoesNotThrow(() -> contract.CreateATO(ctx));
+        }
+
+        @Test
+        void testNullOrEmptyInputs() throws PMException, IOException {
+            MockContext ctx = newTestContext(MockIdentity.ORG2_AO);
+            new MOUContract().SignMOU(ctx, 1);
+            ctx.setATOTransientData(null, null);
+            assertDoesNotThrow(() -> contract.CreateATO(ctx));
+            ctx.setATOTransientData("", null);
+            assertDoesNotThrow(() -> contract.CreateATO(ctx));
+            ctx.setATOTransientData("memo", null);
+            assertDoesNotThrow(() -> contract.CreateATO(ctx));
+            ctx.setATOTransientData(null, "");
+            assertDoesNotThrow(() -> contract.CreateATO(ctx));
+            ctx.setATOTransientData(null, "art");
+            assertDoesNotThrow(() -> contract.CreateATO(ctx));
+            ctx.setATOTransientData("mem", "art");
+            assertDoesNotThrow(() -> contract.CreateATO(ctx));
+        }
     }
 
     @Nested
@@ -125,11 +156,13 @@ public class ATOContractTest {
             Instant now = Instant.now();
             mockCtx.setTimestamp(now);
             mockCtx.setTxId("123");
-            contract.CreateATO(mockCtx, "memo", "artifacts");
+            mockCtx.setATOTransientData("memo", "artifacts");
+            contract.CreateATO(mockCtx);
 
             Instant now2 = Instant.now();
             mockCtx.setTimestamp(now2);
-            contract.UpdateATO(mockCtx, "memo2", "artifacts2");
+            mockCtx.setATOTransientData("memo2", "artifacts2");
+            contract.UpdateATO(mockCtx);
 
             ATO actual = contract.GetATO(mockCtx, ORG2_MSP);
             assertEquals(
@@ -153,20 +186,22 @@ public class ATOContractTest {
             Instant now = Instant.now();
             mockCtx.setTimestamp(now);
             mockCtx.setTxId("123");
-            contract.CreateATO(mockCtx, "memo", "artifacts");
+            mockCtx.setATOTransientData("memo", "artifacts");
+            contract.CreateATO(mockCtx);
 
             mockCtx.setClientIdentity(MockIdentity.ORG2_NON_AO);
 
             ChaincodeException e =
-                    assertThrows(ChaincodeException.class, () -> contract.UpdateATO(mockCtx, "memo", "artifacts"));
+                    assertThrows(ChaincodeException.class, () -> contract.UpdateATO(mockCtx));
             assertEquals("unknown user role: System Administrator", e.getMessage());
         }
 
         @Test
         void testBeforeJoinThrowsException() throws Exception {
             MockContext mockCtx = newTestMockContextWithOneAccount(MockIdentity.ORG3_AO);
+            mockCtx.setATOTransientData("memo", "artifacts");
             ChaincodeException e = assertThrows(
-                    ChaincodeException.class, () -> contract.CreateATO(mockCtx, "memo", "artifacts")
+                    ChaincodeException.class, () -> contract.CreateATO(mockCtx)
             );
             assertEquals("account Org3MSP does not exist", e.getMessage());
         }
@@ -178,17 +213,46 @@ public class ATOContractTest {
             Instant now = Instant.now();
             mockCtx.setTimestamp(now);
             mockCtx.setTxId("123");
-            contract.CreateATO(mockCtx, "memo", "artifacts");
+            mockCtx.setATOTransientData("memo", "artifacts");
+            contract.CreateATO(mockCtx);
 
             Instant now2 = Instant.now();
             mockCtx.setTimestamp(now2);
-            contract.UpdateATO(mockCtx, "memo2", "artifacts2");
+            mockCtx.setATOTransientData("memo2", "artifacts2");
+            contract.UpdateATO(mockCtx);
 
             MockEvent actual = mockCtx.getStub().getMockEvent();
             assertEquals(
                     new MockEvent("UpdateATO", SerializationUtils.serialize(new ATOEvent(ORG2_MSP))),
                     actual
             );
+        }
+
+        @Test
+        void testWhenPending() throws PMException, IOException {
+            MockContext ctx = newTestContext(MockIdentity.ORG2_AO);
+            new MOUContract().SignMOU(ctx, 1);
+            ctx.setATOTransientData("memo", "artifacts");
+            contract.CreateATO(ctx);
+            assertDoesNotThrow(() -> contract.UpdateATO(ctx));
+        }
+
+        @Test
+        void testNullOrEmptyInputs() throws PMException, IOException {
+            MockContext ctx = newTestContext(MockIdentity.ORG2_AO);
+            new MOUContract().SignMOU(ctx, 1);
+            ctx.setATOTransientData(null, null);
+            assertDoesNotThrow(() -> contract.CreateATO(ctx));
+            ctx.setATOTransientData("", null);
+            assertDoesNotThrow(() -> contract.CreateATO(ctx));
+            ctx.setATOTransientData("memo", null);
+            assertDoesNotThrow(() -> contract.CreateATO(ctx));
+            ctx.setATOTransientData(null, "");
+            assertDoesNotThrow(() -> contract.CreateATO(ctx));
+            ctx.setATOTransientData(null, "art");
+            assertDoesNotThrow(() -> contract.CreateATO(ctx));
+            ctx.setATOTransientData("mem", "art");
+            assertDoesNotThrow(() -> contract.CreateATO(ctx));
         }
     }
 
@@ -264,11 +328,14 @@ public class ATOContractTest {
             Instant now = Instant.now();
             mockCtx.setTimestamp(now);
             mockCtx.setTxId("123");
-            contract.CreateATO(mockCtx, "memo", "artifacts");
+            mockCtx.setATOTransientData("memo", "artifacts");
+            contract.CreateATO(mockCtx);
 
             mockCtx.setClientIdentity(MockIdentity.ORG3_AO);
-            contract.SubmitFeedback(mockCtx, ORG2_MSP, 1, "comment1");
-            contract.SubmitFeedback(mockCtx, ORG2_MSP, 1, "comment2");
+            mockCtx.setFeedbackTransientData(ORG2_MSP, "1", "comment1");
+            contract.SubmitFeedback(mockCtx);
+            mockCtx.setFeedbackTransientData( ORG2_MSP, "1", "comment2");
+            contract.SubmitFeedback(mockCtx);
 
             ATO actual = contract.GetATO(mockCtx, ORG2_MSP);
             assertEquals(
@@ -298,11 +365,14 @@ public class ATOContractTest {
             Instant now = Instant.now();
             mockCtx.setTimestamp(now);
             mockCtx.setTxId("123");
-            contract.CreateATO(mockCtx, "memo", "artifacts");
+            mockCtx.setATOTransientData("memo", "artifacts");
+            contract.CreateATO(mockCtx);
 
             mockCtx.setClientIdentity(MockIdentity.ORG3_AO);
-            contract.SubmitFeedback(mockCtx, ORG2_MSP, 1, "comment1");
-            contract.SubmitFeedback(mockCtx, ORG2_MSP, 1, "comment2");
+            mockCtx.setFeedbackTransientData(ORG2_MSP, "1", "comment1");
+            contract.SubmitFeedback(mockCtx);
+            mockCtx.setFeedbackTransientData(ORG2_MSP, "1", "comment2");
+            contract.SubmitFeedback(mockCtx);
 
             MockEvent mockEvent = mockCtx.getStub().getMockEvent();
             assertEquals("SubmitFeedback", mockEvent.getName());
@@ -323,11 +393,14 @@ public class ATOContractTest {
             Instant now = Instant.now();
             mockCtx.setTimestamp(now);
             mockCtx.setTxId("123");
-            contract.CreateATO(mockCtx, "memo", "artifacts");
+            mockCtx.setATOTransientData("memo", "artifacts");
+            contract.CreateATO(mockCtx);
 
             mockCtx.setClientIdentity(MockIdentity.ORG3_AO);
-            contract.SubmitFeedback(mockCtx, ORG2_MSP, 1, "comment1");
-            contract.SubmitFeedback(mockCtx, ORG2_MSP, 1, "comment2");
+            mockCtx.setFeedbackTransientData(ORG2_MSP, "1", "comment1");
+            contract.SubmitFeedback(mockCtx);
+            mockCtx.setFeedbackTransientData(ORG2_MSP, "1", "comment2");
+            contract.SubmitFeedback(mockCtx);
 
             ATO actual = contract.GetATO(mockCtx, ORG2_MSP);
             assertEquals(
@@ -350,7 +423,8 @@ public class ATOContractTest {
             now = Instant.now();
             mockCtx.setTimestamp(now);
             mockCtx.setTxId("1234");
-            contract.CreateATO(mockCtx, "memo2", "artifacts2");
+            mockCtx.setATOTransientData("memo2", "artifacts2");
+            contract.CreateATO(mockCtx);
             actual = contract.GetATO(mockCtx, ORG2_MSP);
             assertEquals(
                     new ATO(
@@ -373,12 +447,14 @@ public class ATOContractTest {
             Instant now = Instant.now();
             mockCtx.setTimestamp(now);
             mockCtx.setTxId("123");
-            contract.CreateATO(mockCtx, "memo", "artifacts");
+            mockCtx.setATOTransientData("memo", "artifacts");
+            contract.CreateATO(mockCtx);
 
             mockCtx.setClientIdentity(MockIdentity.ORG2_NON_AO);
 
+            mockCtx.setFeedbackTransientData("Org1MSP", "1", "comments");
             ChaincodeException e =
-                    assertThrows(ChaincodeException.class, () -> contract.SubmitFeedback(mockCtx, "Org1MSP", 1, ""));
+                    assertThrows(ChaincodeException.class, () -> contract.SubmitFeedback(mockCtx));
             assertEquals("unknown user role: System Administrator", e.getMessage());
         }
 
@@ -389,22 +465,25 @@ public class ATOContractTest {
             Instant now = Instant.now();
             mockCtx.setTimestamp(now);
             mockCtx.setTxId("123");
-            contract.CreateATO(mockCtx, "memo", "artifacts");
+            mockCtx.setATOTransientData("memo", "artifacts");
+            contract.CreateATO(mockCtx);
 
             mockCtx.setClientIdentity(MockIdentity.ORG3_AO);
             updateAccountStatus(mockCtx, ORG3_MSP, AUTHORIZED);
+            mockCtx.setFeedbackTransientData(ORG2_MSP, "2", "comment1");
             ChaincodeException e =
                     assertThrows(ChaincodeException.class,
-                                                () -> contract.SubmitFeedback(mockCtx, ORG2_MSP, 2, "comment1"));
+                                                () -> contract.SubmitFeedback(mockCtx));
             assertEquals("submitting feedback on incorrect ATO version: current version 1, got 2", e.getMessage());
         }
 
         @Test
         void testBeforeJoinThrowsException() throws Exception {
             MockContext mockCtx = newTestMockContextWithOneAccount(MockIdentity.ORG3_AO);
+            mockCtx.setFeedbackTransientData(ORG2_MSP, "1", "comment1");
             ChaincodeException e = assertThrows(
                     ChaincodeException.class,
-                    () -> contract.SubmitFeedback(mockCtx, ORG2_MSP, 1, "comment1")
+                    () -> contract.SubmitFeedback(mockCtx)
             );
             assertEquals("account Org3MSP does not exist", e.getMessage());
         }
@@ -414,12 +493,59 @@ public class ATOContractTest {
             MockContext mockCtx = newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
 
             updateAccountStatus(mockCtx, ORG2_MSP, AUTHORIZED);
-
+            mockCtx.setFeedbackTransientData(ORG3_MSP, "1", "comment1");
             ChaincodeException e = assertThrows(
                     ChaincodeException.class,
-                    () -> contract.SubmitFeedback(mockCtx, ORG3_MSP, 1, "comment1")
+                    () -> contract.SubmitFeedback(mockCtx)
             );
             assertEquals("Org3MSP has not created an ATO yet", e.getMessage());
+        }
+
+        @Test
+        void testNullOrEmptyInputs() throws Exception {
+            MockContext ctx = newTestMockContextWithAccounts(MockIdentity.ORG2_AO);
+            ctx.setFeedbackTransientData(null, null, null);
+            ChaincodeException e = assertThrows(
+                    ChaincodeException.class,
+                    () -> contract.SubmitFeedback(ctx)
+            );
+            assertEquals("targetAccountId cannot be null or empty", e.getMessage());
+
+            ctx.setFeedbackTransientData("", null, null);
+            e = assertThrows(
+                    ChaincodeException.class,
+                    () -> contract.SubmitFeedback(ctx)
+            );
+            assertEquals("targetAccountId cannot be null or empty", e.getMessage());
+
+            ctx.setFeedbackTransientData(ORG1_MSP, null, null);
+            e = assertThrows(
+                    ChaincodeException.class,
+                    () -> contract.SubmitFeedback(ctx)
+            );
+            assertEquals("atoVersion cannot be null or empty", e.getMessage());
+
+            ctx.setFeedbackTransientData(ORG1_MSP, "", null);
+            e = assertThrows(
+                    ChaincodeException.class,
+                    () -> contract.SubmitFeedback(ctx)
+            );
+            assertEquals("atoVersion cannot be null or empty", e.getMessage());
+
+            ctx.setFeedbackTransientData(ORG1_MSP, "1", null);
+            e = assertThrows(
+                    ChaincodeException.class,
+                    () -> contract.SubmitFeedback(ctx)
+            );
+            assertEquals("comments cannot be null or empty", e.getMessage());
+
+            ctx.setFeedbackTransientData(ORG1_MSP, "1", "");
+            e = assertThrows(
+                    ChaincodeException.class,
+                    () -> contract.SubmitFeedback(ctx)
+            );
+            assertEquals("comments cannot be null or empty", e.getMessage());
+
         }
     }
 }

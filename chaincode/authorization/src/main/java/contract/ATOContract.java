@@ -14,6 +14,10 @@ import org.hyperledger.fabric.contract.annotation.Info;
 import org.hyperledger.fabric.contract.annotation.Transaction;
 import org.hyperledger.fabric.shim.ChaincodeException;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.Map;
+
 import static contract.AccountContract.accountImplicitDataCollection;
 
 @Contract(
@@ -32,24 +36,27 @@ public class ATOContract implements ContractInterface {
 
     /**
      * Create a new ATO for the account the CID belongs to. This will create a new ID using the transaction
-     * id, reset the version to 1, and remove feedback from the previous version.
+     * id, reset the version to 1, and remove feedback from the previous version. The memo and artifacts must be
+     * embedded in the transient field of the fabric context.
+     *
+     * Transient Data: {"memo": "memo text", "artifacts": "artifacts text"}
      *
      * event:
      *  - name: "CreateATO"
      *  - payload: a serialized Account object
      *
      * @param ctx Fabric context object.
-     * @param memo The ATO memo value.
-     * @param artifacts The ATO artifacts value.
      * @throws ChaincodeException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
      */
-    public void CreateATO(Context ctx, String memo, String artifacts) {
+    public void CreateATO(Context ctx) {
         String accountId = ctx.getClientIdentity().getMSPID();
+
+        ATORequest request = new ATORequest(ctx);
 
         // check the requesting cid can write an ATO
         new BlossomPDP().writeATO(ctx, accountId);
 
-        ATO ato = ATO.createFromContext(ctx, memo, artifacts);
+        ATO ato = ATO.createFromContext(ctx, request.memo, request.artifacts);
 
         // serialize the account object with updated ATO and put to state
         byte[] bytes = SerializationUtils.serialize(ato);
@@ -61,27 +68,30 @@ public class ATOContract implements ContractInterface {
 
     /**
      * Update the ATO for the account the CID belongs to. This will increment the ATO version and update
-     * the memo and artifacts fields. If either parameter is empty or null, the existing value will not be updated.
+     * the memo and artifacts fields. If either parameter is empty or null, the existing value will not be updated. The
+     * memo and artifacts must be embedded in the transient field of the fabric context.
+     *
+     * Transient Data: {"memo": "memo text", "artifacts": "artifacts text"}
      *
      * event:
      *  - name: "UpdateATO"
      *  - payload: a serialized Account object
      *
      * @param ctx Fabric context object.
-     * @param memo The ATO memo value.
-     * @param artifacts The ATO artifacts value.
      * @throws ChaincodeException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
      * @throws ChaincodeException If the account's ATO has not been created yet.
      */
-    public void UpdateATO(Context ctx, String memo, String artifacts) {
+    public void UpdateATO(Context ctx) {
         String accountId = ctx.getClientIdentity().getMSPID();
+
+        ATORequest request = new ATORequest(ctx);
 
         // check the requesting cid can write an ATO
         new BlossomPDP().writeATO(ctx, accountId);
 
         // deserialize the account object from the state and update the ATO value
         ATO ato = GetATO(ctx, accountId);
-        ato.update(ato.getVersion() + 1, ctx.getStub().getTxTimestamp().toString(), memo, artifacts);
+        ato.update(ato.getVersion() + 1, ctx.getStub().getTxTimestamp().toString(), request.memo, request.artifacts);
 
         // serialize the account object with updated ATO and put to state
         byte[] bytes = SerializationUtils.serialize(ato);
@@ -115,7 +125,10 @@ public class ATOContract implements ContractInterface {
 
     /**
      * Submit feedback on a member's ATO. The provided ATO version must match the member's current ATO version to ensure
-     * the feedback is happening on the most recent version. The comments are stored in a string.
+     * the feedback is happening on the most recent version. The comments are stored in a string. The targetAccountId,
+     * atoVersion, and comments must be embedded in the transient field of the fabric context.
+     *
+     * Transient Data: {"targetAccountId": "target id", "atoVersion": "ato version #", "comments": "comments text"}
      *
      * NGAC: All members can submit feedback on their own ATOs (i.e. respond directly to feedback from others). Only
      * authorized members can submit feedback to others.
@@ -125,37 +138,88 @@ public class ATOContract implements ContractInterface {
      *  - payload: a serialized Account object
      *
      * @param ctx Fabric context object.
-     * @param targetAccountId The member to provide feedback to.
-     * @param atoVersion The target account's ATO version the feedback is addressing.
-     * @param comments The comments provided.
      * @throws ChaincodeException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
      * @throws ChaincodeException If the target account has not created an ATO yet.
      * @throws ChaincodeException If the feedback is targeting the wrong ATO version.
      */
     @Transaction
-    public void SubmitFeedback(Context ctx, String targetAccountId, int atoVersion, String comments) {
+    public void SubmitFeedback(Context ctx) {
         String accountId = ctx.getClientIdentity().getMSPID();
+        FeedbackRequest request = new FeedbackRequest(ctx);
 
-        ATO targetATO = GetATO(ctx, targetAccountId);
+        ATO targetATO = GetATO(ctx, request.targetAccountId);
 
         // check that the ato version being commented on is the same as the current version for the account
         int currentATOVersion = targetATO.getVersion();
-        if (currentATOVersion != atoVersion) {
+        if (currentATOVersion != request.atoVersion) {
             throw new ChaincodeException("submitting feedback on incorrect ATO version: current version " +
-                                                 currentATOVersion + ", got " + atoVersion);
+                                                 currentATOVersion + ", got " + request.atoVersion);
         }
 
         // check that cid can submit feedback
-        new BlossomPDP().submitFeedback(ctx, targetAccountId);
+        new BlossomPDP().submitFeedback(ctx, request.targetAccountId);
 
-        Feedback feedback = new Feedback(atoVersion, accountId, comments);
+        Feedback feedback = new Feedback(request.atoVersion, accountId, request.comments);
         targetATO.addFeedback(feedback);
 
         byte[] bytes = SerializationUtils.serialize(targetATO);
-        ctx.getStub().putPrivateData(accountImplicitDataCollection(targetAccountId), atoKey(targetAccountId), bytes);
+        ctx.getStub().putPrivateData(accountImplicitDataCollection(request.targetAccountId), atoKey(request.targetAccountId), bytes);
 
         // set event
         ctx.getStub().setEvent("SubmitFeedback",
-                               SerializationUtils.serialize(new SubmitFeedbackEvent(targetAccountId, accountId)));
+                               SerializationUtils.serialize(new SubmitFeedbackEvent(request.targetAccountId, accountId)));
+    }
+
+    static class ATORequest {
+        final String memo;
+        final String artifacts;
+
+        ATORequest(Context ctx) {
+            Map<String, byte[]> t = ctx.getStub().getTransient();
+
+            byte[] memoBytes = t.get("memo");
+            byte[] artBytes = t.get("artifacts");
+
+            if (memoBytes == null) {
+                memoBytes = new byte[]{};
+            }
+
+            if (artBytes == null) {
+                artBytes = new byte[]{};
+            }
+
+            this.memo = new String(memoBytes, StandardCharsets.UTF_8);
+            this.artifacts = new String(artBytes, StandardCharsets.UTF_8);
+        }
+    }
+
+    static class FeedbackRequest {
+        final String targetAccountId;
+        final int atoVersion;
+        final String comments;
+
+        FeedbackRequest(Context ctx) {
+            Map<String, byte[]> t = ctx.getStub().getTransient();
+
+            byte[] targetBytes = t.get("targetAccountId");
+            byte[] versionBytes = t.get("atoVersion");
+            byte[] commentsBytes = t.get("comments");
+
+            if (targetBytes == null || targetBytes.length == 0) {
+                throw new ChaincodeException("targetAccountId cannot be null or empty");
+            }
+
+            if (versionBytes == null || versionBytes.length == 0) {
+                throw new ChaincodeException("atoVersion cannot be null or empty");
+            }
+
+            if (commentsBytes == null || commentsBytes.length == 0) {
+                throw new ChaincodeException("comments cannot be null or empty");
+            }
+
+            this.targetAccountId = new String(targetBytes, StandardCharsets.UTF_8);
+            this.atoVersion = Integer.parseInt(new String(versionBytes, StandardCharsets.UTF_8));
+            this.comments = new String(commentsBytes, StandardCharsets.UTF_8);
+        }
     }
 }

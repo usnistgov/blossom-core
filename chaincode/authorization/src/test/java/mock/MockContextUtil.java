@@ -98,7 +98,8 @@ public class MockContextUtil {
         BootstrapContract bootstrapContract = new BootstrapContract();
         bootstrapContract.Bootstrap(mockCtx);
 
-        ato.CreateATO(mockCtx, "org1 test ato", "org1 artifacts");
+        mockCtx.setATOTransientData("org1 test ato", "org1 artifacts");
+        ato.CreateATO(mockCtx);
 
         // clear stub's transient
         mockCtx.getStub().setTransientData(new HashMap<>());
@@ -117,14 +118,18 @@ public class MockContextUtil {
         acct.Join(mockCtx);
 
         mockCtx.setClientIdentity(MockIdentity.ORG2_AO);
-        ato.CreateATO(mockCtx, "memo", "artifacts");
+        mockCtx.setATOTransientData("memo", "artifacts");
+        ato.CreateATO(mockCtx);
 
         mockCtx.setClientIdentity(MockIdentity.ORG3_AO);
-        ato.CreateATO(mockCtx, "memo", "artifacts");
+        mockCtx.setATOTransientData("memo", "artifacts");
+        ato.CreateATO(mockCtx);
 
         mockCtx.setClientIdentity(MockIdentity.ORG1_AO);
-        ato.SubmitFeedback(mockCtx, "Org2MSP", 1, "comment1");
-        ato.SubmitFeedback(mockCtx, "Org3MSP", 1, "comment1");
+        mockCtx.setFeedbackTransientData("Org2MSP", "1", "comment1");
+        ato.SubmitFeedback(mockCtx);
+        mockCtx.setFeedbackTransientData("Org3MSP", "1", "comment1");
+        ato.SubmitFeedback(mockCtx);
 
         mockCtx.setClientIdentity(initialIdentity);
 
