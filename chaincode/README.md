@@ -19,14 +19,14 @@ _Note: The users MSPID is determined by the Fabric CA the identity is registered
 
 - Using the node sdk
 
-  ```javascript  
+  ```typescript  
   // create an organization system owner  
   const secret = await caClient.register({     
 	affiliation: '',     
 	enrollmentID: 'org1_sys_owner', 
 	role: 'client',
 	[         
-		{name: 'blossom.role', value: 'SystemOwner', ecert: true}
+		{name: 'blossom.role', value: 'Authorizing Offical', ecert: true}
 	]  
   }, adminUser);  
   ```  
@@ -34,7 +34,7 @@ _Note: The users MSPID is determined by the Fabric CA the identity is registered
 
   ```shell
   # Create a system owner  
-  ./fabric-ca-client register ... --id.attrs 'blossom.role=SystemOwner' ...  
+  ./fabric-ca-client register ... --id.attrs 'blossom.role=Authorizing Offical' ...  
   ```
 
 ## Authorization
@@ -54,18 +54,18 @@ There is only one end user role supported by the Blossom authorization chaincode
 ### Next Generation Access Control  (NGAC)
 NGAC provides a layer of access control to the Blossom chaincode, ensuring operations are performed only by authorized users. NGAC uses **resource access rights** to refer to the set of operations possible on NGAC resources. The resource access rights supported by the PDP are:
 
-- bootstrap
-- update_vote_config
-- update_mou
-- get_mou
-- sign_mou
+- bootstrap,
+- update_mou,
+- get_mou,
+- sign_mou,
+- join,
+- write_ato,
+- read_ato,
+- submit_feedback,
+- initiate_vote,
+- vote,
+- certify_vote,
 - join
-- write_ato
-- initiate_vote
-- vote
-- abort_vote
-- certify_vote
-- submit_feedback
 
 These access rights are defined in the policy, and checked by the PDP. They are transparent to the chaincode business logic. The NGAC policy is defined in the [policy.pml](./authorization/src/main/resources/policy.pml) file embedded in the chaincode resource folder.
 
@@ -178,7 +178,7 @@ There are three contracts defined in the authorization chaincode: **bootstrap**,
 
 - Command line - Specify the chaincode name using the `-n` arg. Prepend the contract name and a semi colon to the function name in the `-c` arg.
   ```shell
-  -n authorization -c '{"function":"account:GetAccounts","Args":[]}'
+  peer chaincode query ... -n authorization -c '{"function":"account:GetAccounts","Args":[]}'
   ```
 - Node sdk - Specify the chaincode name and contract name in the `fabric-network.Network#getContract` method. Then pass the function name to `fabric-network.Contract#submitTransaction`.
   ```node
@@ -188,9 +188,10 @@ There are three contracts defined in the authorization chaincode: **bootstrap**,
   contract.submitTransaction("GetAccounts")
   ```
 
+
 #### `--peerAddresses`
 - 1 or more peers that have approved the chaincode to target for invoke.
-- This is only needed if more than one peer is needed for endorsement.
+- This is only needed if more than one peer is needed for endorsement or the invocation attempts to read data from another member's private data collections (implicit and explicit).
 - If an org did not approve the chaincode, they will need to target a org that did or else an error will occur.
 - If an org did approve the chaincode, they do not need to target another peer.
 
