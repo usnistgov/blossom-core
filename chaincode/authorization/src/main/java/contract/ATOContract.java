@@ -1,8 +1,7 @@
 package contract;
 
-import contract.event.SubmitFeedbackEvent;
 import contract.event.ATOEvent;
-import gov.nist.csd.pm.policy.exceptions.PMException;
+import contract.event.SubmitFeedbackEvent;
 import model.ATO;
 import model.Feedback;
 import ngac.BlossomPDP;
@@ -15,7 +14,6 @@ import org.hyperledger.fabric.contract.annotation.Transaction;
 import org.hyperledger.fabric.shim.ChaincodeException;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.Map;
 
 import static contract.AccountContract.accountImplicitDataCollection;
@@ -48,6 +46,7 @@ public class ATOContract implements ContractInterface {
      * @param ctx Fabric context object.
      * @throws ChaincodeException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
      */
+    @Transaction
     public void CreateATO(Context ctx) {
         String accountId = ctx.getClientIdentity().getMSPID();
 
@@ -81,6 +80,7 @@ public class ATOContract implements ContractInterface {
      * @throws ChaincodeException If the cid is unauthorized or there is an error checking if the cid is unauthorized.
      * @throws ChaincodeException If the account's ATO has not been created yet.
      */
+    @Transaction
     public void UpdateATO(Context ctx) {
         String accountId = ctx.getClientIdentity().getMSPID();
 
@@ -112,6 +112,7 @@ public class ATOContract implements ContractInterface {
      * @param accountId The member to get the ATO for.
      * @return The ATO of the given member.
      */
+    @Transaction
     public ATO GetATO(Context ctx, String accountId) {
         new BlossomPDP().readATO(ctx, accountId);
 
@@ -176,6 +177,7 @@ public class ATOContract implements ContractInterface {
 
         ATORequest(Context ctx) {
             Map<String, byte[]> t = ctx.getStub().getTransient();
+            System.out.println(t);
 
             byte[] memoBytes = t.get("memo");
             byte[] artBytes = t.get("artifacts");

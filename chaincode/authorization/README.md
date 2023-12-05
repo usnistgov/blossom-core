@@ -3,12 +3,12 @@
 Chaincode functions to handle Blossom authorization.
 
 ## Build Chaincode
-From `blossom-core/chaincode`:
+From `blossom-core/chaincode/authorization`:
  ```
- make clean-auth-cc build-auth-cc
+ ./gradlew shadowJar
  ```
-This will package the chaincode in `blossom-core/chaincode/authorization/build/install`. When installing the chaincode
-on a channel, point to this directory.
+This will build a jar file containing the chaincode and the dependencies at `blossom-core/chaincode/authorization/build/libs/authorization.jar`. 
+When packaging the chaincode point to `blossom-core/chaincode/authorization/build/libs`.
 
 ## Authorization Statuses
 

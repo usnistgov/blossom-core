@@ -17,7 +17,6 @@ import org.hyperledger.fabric.shim.ledger.QueryResultsIterator;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import static contract.AccountContract.accountKey;
 import static model.Status.AUTHORIZED;
@@ -31,7 +30,8 @@ import static model.Status.AUTHORIZED;
                 title = "Blossom Authorization Vote Contract",
                 description = "Chaincode functions to support voting on account statuses",
                 version = "0.0.1"
-        )
+        ),
+        transactionSerializer = "contract.CustomSerializer"
 )
 public class VoteContract implements ContractInterface {
 
@@ -89,7 +89,7 @@ public class VoteContract implements ContractInterface {
         }
 
         // identify voter pool -- all authorized users at initiate time
-        List<Account> accounts = new AccountContract().GetAccounts(ctx);
+        Account[] accounts = new AccountContract().GetAccounts(ctx);
         List<String> voters = new ArrayList<>(List.of(targetAccountId));
         for (Account account : accounts) {
             if (account.getStatus() != AUTHORIZED || account.getId().equals(targetAccountId)) {
@@ -207,12 +207,14 @@ public class VoteContract implements ContractInterface {
 
     /**
      * Get the history of votes in which the provided member was the target of.
-     * @param ctx Fabric context object.
+     *
+     * @param ctx    Fabric context object.
      * @param member The target member.
+     *
      * @return a list of Vote objects.
      */
     @Transaction
-    public List<Vote> GetVoteHistory(Context ctx, String member) {
+    public Vote[] GetVoteHistory(Context ctx, String member) {
         List<Vote> votes = new ArrayList<>();
 
         QueryResultsIterator<KeyModification> history = ctx.getStub().getHistoryForKey(voteKey(member));
@@ -222,7 +224,7 @@ public class VoteContract implements ContractInterface {
             votes.add(SerializationUtils.deserialize(value));
         }
 
-        return votes;
+        return votes.toArray(Vote[]::new);
     }
 
     private Vote getOngoingVote(Context ctx) {
@@ -233,9 +235,7 @@ public class VoteContract implements ContractInterface {
         }
 
         String targetMember = new String(bytes);
-
-        String voteKey = voteKey(targetMember);
-        bytes = ctx.getStub().getState(voteKey);
+        bytes = ctx.getStub().getState(voteKey(targetMember));
         return SerializationUtils.deserialize(bytes);
     }
 

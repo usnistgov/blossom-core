@@ -107,8 +107,8 @@ class MOUContractTest {
         contract.UpdateMOU(mockCtx, "3");
         contract.UpdateMOU(mockCtx, "4");
 
-        List<MOU> history = contract.GetMOUHistory(mockCtx);
-        assertEquals(4, history.size());
+        MOU[] history = contract.GetMOUHistory(mockCtx);
+        assertEquals(4, history.length);
     }
 
     @Nested

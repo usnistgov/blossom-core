@@ -94,19 +94,19 @@ public class MOUContract implements ContractInterface {
      * Get the history of MOU updates.
      *
      * @param ctx Fabric context object.
+     *
      * @return a List of MOU objects representing the history of MOU updates.
      */
     @Transaction
-    public List<MOU> GetMOUHistory(Context ctx) {
-        QueryResultsIterator<KeyModification> historyForKey =
-                ctx.getStub().getHistoryForKey(MOU_KEY);
+    public MOU[] GetMOUHistory(Context ctx) {
+        QueryResultsIterator<KeyModification> historyForKey = ctx.getStub().getHistoryForKey(MOU_KEY);
         List<MOU> history = new ArrayList<>();
 
         for (KeyModification keyModification : historyForKey) {
             history.add(SerializationUtils.deserialize(keyModification.getValue()));
         }
 
-        return history;
+        return history.toArray(MOU[]::new);
     }
 
     /**
@@ -137,10 +137,11 @@ public class MOUContract implements ContractInterface {
         }
 
         String accountId = ctx.getClientIdentity().getMSPID();
+        String acctKey = accountKey(accountId);
 
         // check that account exists, if not create it
         Account account;
-        byte[] bytes = ctx.getStub().getState(accountKey(accountId));
+        byte[] bytes = ctx.getStub().getState(acctKey);
         if (bytes.length == 0) {
             account = new Account(accountId, Status.PENDING, version, false);
         } else {
@@ -154,7 +155,7 @@ public class MOUContract implements ContractInterface {
         account.setMouVersion(version);
 
         bytes = SerializationUtils.serialize(account);
-        ctx.getStub().putState(accountKey(ctx.getClientIdentity().getMSPID()), bytes);
+        ctx.getStub().putState(acctKey, bytes);
 
         ctx.getStub().setEvent("SignMOU", SerializationUtils.serialize(new SignMOUEvent(accountId, version)));
     }

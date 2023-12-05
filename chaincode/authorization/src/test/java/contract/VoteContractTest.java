@@ -395,8 +395,8 @@ class VoteContractTest {
             assertFalse(result);
 
             ctx.setClientIdentity(MockIdentity.ORG3_AO);
-            Status status = accountContract.GetAccountStatus(ctx);
-            assertEquals(Status.AUTHORIZED, status);
+            String status = accountContract.GetAccountStatus(ctx);
+            assertEquals(Status.AUTHORIZED.toString(), status);
         }
 
         @Test
@@ -420,8 +420,8 @@ class VoteContractTest {
             assertTrue(result);
 
             ctx.setClientIdentity(MockIdentity.ORG3_AO);
-            Status status = accountContract.GetAccountStatus(ctx);
-            assertEquals(Status.UNAUTHORIZED, status);
+            String status = accountContract.GetAccountStatus(ctx);
+            assertEquals(Status.UNAUTHORIZED.toString(), status);
         }
 
         @Test
@@ -442,8 +442,8 @@ class VoteContractTest {
             assertEquals("not enough votes to certify", e.getMessage());
 
             ctx.setClientIdentity(MockIdentity.ORG3_AO);
-            Status status = accountContract.GetAccountStatus(ctx);
-            assertEquals(Status.AUTHORIZED, status);
+            String status = accountContract.GetAccountStatus(ctx);
+            assertEquals(Status.AUTHORIZED.toString(), status);
         }
 
         @Test
@@ -587,8 +587,8 @@ class VoteContractTest {
         void testGetVoteHistoryEmpty() throws Exception {
             MockContext ctx = MockContextUtil.newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
 
-            List<Vote> votes = voteContract.GetVoteHistory(ctx, ORG2_MSP);
-            assertTrue(votes.isEmpty());
+            Vote[] votes = voteContract.GetVoteHistory(ctx, ORG2_MSP);
+            assertEquals(0, votes.length);
         }
 
         @Test
@@ -613,8 +613,8 @@ class VoteContractTest {
             ctx.setClientIdentity(MockIdentity.ORG2_AO);
             voteContract.CertifyOngoingVote(ctx);
 
-            List<Vote> votes = voteContract.GetVoteHistory(ctx, ORG3_MSP);
-            assertEquals(10, votes.size());
+            Vote[] votes = voteContract.GetVoteHistory(ctx, ORG3_MSP);
+            assertEquals(10, votes.length);
         }
     }
 

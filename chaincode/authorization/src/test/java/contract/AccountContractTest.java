@@ -12,6 +12,8 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -80,7 +82,7 @@ class AccountContractTest {
             ChaincodeException e = assertThrows(ChaincodeException.class, () -> contract.Join(ctx));
             assertEquals(
                     "cid is not authorized to join for account Org2MSP",
-                         e.getMessage()
+                    e.getMessage()
             );
         }
 
@@ -94,11 +96,19 @@ class AccountContractTest {
             Instant now = Instant.now();
             MockContext ctx = newTestMockContextWithAccountsAndATOs(MockIdentity.ORG1_AO, now);
 
-            List<Account> accounts = contract.GetAccounts(ctx);
+            List<Account> accounts = List.of(contract.GetAccounts(ctx));
             assertEquals(3, accounts.size());
             assertTrue(accounts.contains(new Account(ORG1_MSP, AUTHORIZED, 0, true)));
             assertTrue(accounts.contains(new Account(ORG2_MSP, Status.AUTHORIZED, 1, true)));
             assertTrue(accounts.contains(new Account(ORG3_MSP, Status.AUTHORIZED, 1, true)));
+        }
+
+        @Test
+        void testGetAccountsEmpty() throws Exception {
+            MockContext ctx = new MockContext(MockIdentity.ORG1_AO);
+
+            List<Account> accounts = List.of(contract.GetAccounts(ctx));
+            assertTrue(accounts.isEmpty());
         }
     }
 
@@ -145,13 +155,13 @@ class AccountContractTest {
         void testGetAccountStatus() throws Exception {
             MockContext ctx = newTestMockContextWithAccounts(MockIdentity.ORG1_AO);
 
-            Status status = contract.GetAccountStatus(ctx);
-            assertEquals(AUTHORIZED, status);
+            String status = contract.GetAccountStatus(ctx);
+            assertEquals(AUTHORIZED.toString(), status);
 
             ctx.setClientIdentity(MockIdentity.ORG2_AO);
             updateAccountStatus(ctx, ORG2_MSP, UNAUTHORIZED);
             status = contract.GetAccountStatus(ctx);
-            assertEquals(Status.UNAUTHORIZED, status);
+            assertEquals(Status.UNAUTHORIZED.toString(), status);
         }
 
     }
@@ -167,13 +177,33 @@ class AccountContractTest {
             updateAccountStatus(ctx, ORG2_MSP, UNAUTHORIZED);
             updateAccountStatus(ctx, ORG2_MSP, AUTHORIZED);
 
-            List<AccountHistorySnapshot> history = contract.GetAccountHistory(ctx, ORG2_MSP);
-            assertEquals(5, history.size());
-            assertTrue(history.contains(new AccountHistorySnapshot("123", "1970-01-01T00:00:00.001Z", new Account("Org2MSP", AUTHORIZED, 1, true))));
-            assertTrue(history.contains(new AccountHistorySnapshot("123", "1970-01-01T00:00:00.001Z", new Account("Org2MSP", UNAUTHORIZED, 1, true))));
-            assertTrue(history.contains(new AccountHistorySnapshot("123", "1970-01-01T00:00:00.001Z", new Account("Org2MSP", AUTHORIZED, 1, true))));
-            assertTrue(history.contains(new AccountHistorySnapshot("123", "1970-01-01T00:00:00.001Z", new Account("Org2MSP", AUTHORIZED, 1, true))));
-            assertTrue(history.contains(new AccountHistorySnapshot("123", "1970-01-01T00:00:00.001Z", new Account("Org2MSP", PENDING, 1, false))));
+            AccountHistorySnapshot[] history = contract.GetAccountHistory(ctx, ORG2_MSP);
+            assertEquals(5, history.length);
+            assertEquals(
+                    new AccountHistorySnapshot("123", "1970-01-01T00:00:00.001Z",
+                                               new Account("Org2MSP", AUTHORIZED, 1, true)),
+                    history[0]
+            );
+            assertEquals(
+                    new AccountHistorySnapshot("123", "1970-01-01T00:00:00.001Z",
+                                               new Account("Org2MSP", UNAUTHORIZED, 1, true)),
+                    history[1]
+            );
+            assertEquals(
+                    new AccountHistorySnapshot("123", "1970-01-01T00:00:00.001Z",
+                                               new Account("Org2MSP", AUTHORIZED, 1, true)),
+                    history[2]
+            );
+            assertEquals(
+                    new AccountHistorySnapshot("123", "1970-01-01T00:00:00.001Z",
+                                               new Account("Org2MSP", AUTHORIZED, 1, false)),
+                    history[3]
+            );
+            assertEquals(
+                    new AccountHistorySnapshot("123", "1970-01-01T00:00:00.001Z",
+                                               new Account("Org2MSP", PENDING, 1, false)),
+                    history[4]
+            );
         }
     }
 }

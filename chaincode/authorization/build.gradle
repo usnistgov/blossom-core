@@ -1,19 +1,18 @@
-/*
- * SPDX-License-Identifier: Apache-2.0
- */
+buildscript {
+    dependencies {
+        classpath fileTree(dir: 'plugin', include:['*.jar'])
+    }
+}
 
 plugins {
     id 'application'
 }
 
-group 'authorization'
-version '0.0.1'
+group 'blossom-core.chaincode.authorization'
+version '1.0'
 
 dependencies {
-    // implementation project(":common")
-    implementation 'org.hyperledger.fabric-chaincode-java:fabric-chaincode-shim:2.2.+'
-    implementation 'org.json:json:+'
-    implementation 'com.github.PM-Master:policy-machine-core:73de668'
+    compile fileTree(dir:'libs',includes:['*.jar'])
 
     testImplementation 'org.hyperledger.fabric-chaincode-java:fabric-chaincode-shim:2.2.+'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.1'
@@ -32,21 +31,15 @@ repositories {
     jcenter()
 }
 
-application {
-    mainClass = 'org.hyperledger.fabric.contract.ContractRouter'
-}
+apply plugin: 'com.github.johnrengelman.shadow'
 
-test {
-    useJUnitPlatform()
-    testLogging {
-        events "passed", "skipped", "failed"
+shadowJar {
+    baseName = 'authorization'
+    version = null
+    classifier = null
+    mainClassName = 'org.hyperledger.fabric.contract.ContractRouter'
+
+    manifest {
+        attributes 'Main-Class': 'org.hyperledger.fabric.contract.ContractRouter'
     }
 }
-
-javadoc {
-    destinationDir = file("${buildDir}/docs/javadoc")
-
-    options.memberLevel = JavadocMemberLevel.PRIVATE
-}
-
-installDist.dependsOn check
