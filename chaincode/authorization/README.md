@@ -10,6 +10,18 @@ From `blossom-core/chaincode/authorization`:
 This will build a jar file containing the chaincode and the dependencies at `blossom-core/chaincode/authorization/build/libs/authorization.jar`. 
 When packaging the chaincode point to `blossom-core/chaincode/authorization/build/libs`.
 
+To rebuild the `/libs` folder, run `./gradlew build --build-file build-libs
+
+### Build using docker
+To build the chaincode using java 11 and gradle 5.6.2, from `blossom-core/chaincode/authorization/` run:
+```
+make build-auth
+```
+
+This will create the shadowJar in `blossom-core/chaincode/authorization/build/libs/authorization.jar` and rebuild the libs
+directory `blossom-core/chaincode/authorization/build/libs`.
+
+
 ## Authorization Statuses
 
 - AUTHORIZED
