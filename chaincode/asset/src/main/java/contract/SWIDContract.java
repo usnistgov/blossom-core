@@ -15,10 +15,8 @@ import org.hyperledger.fabric.shim.ChaincodeException;
 import org.hyperledger.fabric.shim.ledger.KeyValue;
 import org.hyperledger.fabric.shim.ledger.QueryResultsIterator;
 
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 import static contract.AssetContract.*;
 
@@ -33,8 +31,8 @@ import static contract.AssetContract.*;
 public class SWIDContract implements ContractInterface {
 
     public static final String SWID_PREFIX = "swid:";
-    public static String swidKey(String id) {
-        return SWID_PREFIX + id;
+    public static String swidKey(String licenseId) {
+        return SWID_PREFIX + licenseId;
     }
 
     private SWIDPDP pdp = new SWIDPDP();
@@ -70,7 +68,7 @@ public class SWIDContract implements ContractInterface {
         String id = ctx.getStub().getTxId();
         ctx.getStub().putPrivateData(
                 accountIPDC(req.getAccount()),
-                swidKey(id),
+                swidKey(req.getLicenseId()),
                 new SWID(id, req.getPrimaryTag(), req.getXml(), req.getPrimaryTag(), req.getLicenseId()).toByteArray()
         );
     }
@@ -85,10 +83,10 @@ public class SWIDContract implements ContractInterface {
         String collection = accountIPDC(req.getAccount());
 
         // check if swid with id exists
-        String key = swidKey(req.getId());
+        String key = swidKey(req.getLicenseId());
         byte[] bytes = ctx.getStub().getPrivateData(collection, key);
         if (bytes.length == 0) {
-            throw new ChaincodeException("SWID with id " + req.getId() + " does not exist");
+            throw new ChaincodeException("SWID with id " + req.getLicenseId() + " does not exist");
         }
 
         // delete from account's private data
@@ -102,9 +100,9 @@ public class SWIDContract implements ContractInterface {
         // check can read swid for this account
         // TODO NGAC pdp.canReadSwID(ctx);
 
-        SWID swid = getSWIDWithId(ctx, req.getAccount(), req.getId());
+        SWID swid = getSWIDWithId(ctx, req.getAccount(), req.getLicenseId());
         if (swid == null) {
-            throw new ChaincodeException("SWID with id " + req.getId() + " does not exist");
+            throw new ChaincodeException("SWID with id " + req.getLicenseId() + " does not exist");
         }
 
         return swid;
@@ -117,11 +115,11 @@ public class SWIDContract implements ContractInterface {
         return getSWIDsAssociatedWithAsset(ctx, req.getAssetId());
     }
 
-    SWID getSWIDWithId(Context ctx, String account, String id) {
+    SWID getSWIDWithId(Context ctx, String account, String licenseId) {
         String collection = accountIPDC(account);
 
         // check if swid with id exists
-        String key = swidKey(id);
+        String key = swidKey(licenseId);
         byte[] bytes = ctx.getStub().getPrivateData(collection, key);
         if (bytes.length == 0) {
             return null;

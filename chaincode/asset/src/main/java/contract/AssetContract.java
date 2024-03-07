@@ -5,19 +5,19 @@ import contract.response.AssetDetailResponse;
 import contract.response.AssetResponse;
 import model.*;
 import ngac.AssetPDP;
-import org.apache.commons.lang3.SerializationUtils;
 import org.hyperledger.fabric.contract.Context;
 import org.hyperledger.fabric.contract.ContractInterface;
 import org.hyperledger.fabric.contract.annotation.Contract;
 import org.hyperledger.fabric.contract.annotation.Info;
 import org.hyperledger.fabric.contract.annotation.Transaction;
 import org.hyperledger.fabric.shim.ChaincodeException;
+import org.hyperledger.fabric.shim.ledger.KeyModification;
 import org.hyperledger.fabric.shim.ledger.KeyValue;
 import org.hyperledger.fabric.shim.ledger.QueryResultsIterator;
 
 import java.util.*;
 
-import static model.AllocatedLicenses.allocatedKey;
+import static model.LicenseKey.LICENSE_PREFIX;
 import static ngac.PDP.ADMINMSP;
 
 @Contract(
@@ -32,7 +32,6 @@ public class AssetContract implements ContractInterface {
 
     public static final String  ADMINMSP_IPDC = accountIPDC(ADMINMSP);
     public static final String ASSET_PREFIX = "asset:";
-    public static final String LICENSE_PREFIX = "license:";
 
     public static String accountIPDC(String account) {
         return "_implicit_org_" + account;
@@ -42,29 +41,42 @@ public class AssetContract implements ContractInterface {
         return ASSET_PREFIX + assetId;
     }
 
-    public static String licenseKey(String assetId, String licenseId) {
-        return LICENSE_PREFIX + assetId + ":" + licenseId;
-    }
-
-    public static String licenseSearchKey(String assetId) {
-        return LICENSE_PREFIX + assetId;
-    }
-
     private AssetPDP assetPDP = new AssetPDP();
 
     // use transient for license ids
     @Transaction
     public String AddAsset(Context ctx) {
-        // TODO NGAC
-
         AddAssetRequest req = new AddAssetRequest(ctx);
+
+        // TODO NGAC
 
         String id = ctx.getStub().getTxId();
         String startDate = DateFormatter.getFormattedTimestamp(ctx);
 
         // build the asset object and write to ADMINMSP_IPDC
-        Asset asset = new Asset(id, req.getName(), startDate, req.getEndDate(), req.getLicenses());
+        Asset asset = new Asset(id, req.getName(), startDate, req.getEndDate());
         ctx.getStub().putPrivateData(ADMINMSP_IPDC, assetKey(id), asset.toByteArray());
+
+        // create the license keys, writing the hash to the public ledger
+        for (LicenseIdWithSaltRequest licenseIdWithSaltRequest : req.getLicenses()) {
+            LicenseKey key = new LicenseKey(
+                    id,
+                    licenseIdWithSaltRequest.getId(),
+                    licenseIdWithSaltRequest.getSalt()
+            );
+
+            // write to adminmsp -- no need to hash as the key is written to pvt data
+            ctx.getStub().putPrivateData(
+                    ADMINMSP_IPDC,
+                    key.toKey(),
+                    new License(licenseIdWithSaltRequest.getId(), licenseIdWithSaltRequest.getSalt(), null)
+                            .toByteArray()
+            );
+
+            // write to ledger -- a byte array of length 1 for the value will indicate that it does exist on the ledger
+            // but nothing is in the value
+            ctx.getStub().putState(key.toHashKey(), new byte[]{0});
+        }
 
         return id;
     }
@@ -74,21 +86,31 @@ public class AssetContract implements ContractInterface {
         // TODO NGAC
 
         // get asset info from transient data field
-        LicensesRequest req = new LicensesRequest(ctx);
+        AddLicensesRequest req = new AddLicensesRequest(ctx);
 
         // get the asset
         Asset asset = getAsset(ctx, req.getAssetId());
 
         // check that the licenses are not duplicates
-        for (String licenseId : req.getLicenses()) {
-            if (licenseExists(ctx, asset, licenseId)) {
-                throw new ChaincodeException("license " + licenseId + " already exists");
+        for (LicenseIdWithSaltRequest licenseIdWithSaltRequest : req.getLicenses()) {
+            LicenseKey lk = new LicenseKey(asset.getId(), licenseIdWithSaltRequest.getId(), licenseIdWithSaltRequest.getSalt());
+
+            // it's ok to throw an exception here indicating that a license key exists because the cid would have passed
+            // the ngac check for adding licenses to get here
+            if (licenseExists(ctx, lk)) {
+                throw new ChaincodeException("license " + lk + " already exists");
             }
 
-            asset.addAvailableLicense(licenseId);
-        }
+            // write to adminmsp -- a byte array of length 1 for the value will indicate that it does exist on the ledger but nothing is in the value
+            ctx.getStub().putPrivateData(
+                    ADMINMSP_IPDC,
+                    lk.toKey(),
+                    new License(licenseIdWithSaltRequest.getId(), licenseIdWithSaltRequest.getSalt(), null).toByteArray()
+            );
 
-        ctx.getStub().putPrivateData(ADMINMSP_IPDC, assetKey(asset.getId()), asset.toByteArray());
+            // write to ledger
+            ctx.getStub().putState(lk.toHashKey(), new byte[]{0});
+        }
     }
 
     @Transaction
@@ -96,26 +118,32 @@ public class AssetContract implements ContractInterface {
         // TODO NGAC
 
         // get asset info from transient data field
-        LicensesRequest req = new LicensesRequest(ctx);
+        RemoveLicensesRequest req = new RemoveLicensesRequest(ctx);
 
         // get asset
         Asset asset = getAsset(ctx, req.getAssetId());
 
         // remove licenses from adminmsp ipdc as long as they exist and are not allocated
-        for (String licenseId : req.getLicenses()) {
-            if (!asset.getAvailableLicenses().contains(licenseId)) {
+        for (String licenseId : req.getLicenseIds()) {
+            LicenseKey key = new LicenseKey(asset.getId(), licenseId, "");
+
+            byte[] bytes = ctx.getStub().getPrivateData(ADMINMSP_IPDC, key.toKey());
+            if (bytes.length != 0) {
                 throw new ChaincodeException("license " + licenseId + " does not exist");
             }
 
-            String account = getLicenseAllocatedTo(ctx, asset.getId(), licenseId);
-            if (account != null){
-                throw new ChaincodeException("license " + licenseId + " is allocated to " + account);
+            License license = License.fromByteArray(bytes);
+            if (license.getAllocated() != null){
+                throw new ChaincodeException("license " + licenseId + " is allocated to " + license.getAllocated().getAccount());
             }
 
-            asset.removeAvailableLicense(licenseId);
-        }
+            // delete license key from ADMINMSP
+            ctx.getStub().delPrivateData(ADMINMSP_IPDC, key.toKey());
 
-        ctx.getStub().putPrivateData(ADMINMSP_IPDC, assetKey(asset.getId()), asset.toByteArray());
+            // delete license key from ledger
+            key.setSalt(license.getSalt());
+            ctx.getStub().delState(key.toHashKey());
+        }
     }
 
     @Transaction
@@ -153,15 +181,16 @@ public class AssetContract implements ContractInterface {
 
         List<AssetResponse> assets = new ArrayList<>();
 
-        try(QueryResultsIterator<KeyValue> stateByRange = getAssetQueryIterator(ctx, ASSET_PREFIX)) {
-            for (KeyValue next : stateByRange) {
+        try(QueryResultsIterator<KeyValue> assetRange = getAssetQueryIterator(ctx, ASSET_PREFIX)) {
+            for (KeyValue next : assetRange) {
                 byte[] value = next.getValue();
 
                 Asset asset = Asset.fromByteArray(value);
+
                 AssetResponse assetResponse = new AssetResponse(
                         asset.getId(),
                         asset.getName(),
-                        asset.getAvailableLicenses().size(),
+                        getAvailableLicenses(ctx, asset.getId()).size(),
                         asset.getStartDate(),
                         asset.getEndDate()
                 );
@@ -182,13 +211,14 @@ public class AssetContract implements ContractInterface {
         AssetIdRequest req = new AssetIdRequest(ctx);
 
         Asset asset = getAsset(ctx, req.getAssetId());
+        List<License> availableLicenses = getAvailableLicenses(ctx, asset.getId());
 
         AssetDetailResponse response;
         if (false) {// TODO NGAC Check
             response = new AssetDetailResponse(
                     asset.getId(),
                     asset.getName(),
-                    asset.getAvailableLicenses().size(),
+                    availableLicenses.size(),
                     asset.getStartDate(),
                     asset.getEndDate(),
                     0,
@@ -196,25 +226,80 @@ public class AssetContract implements ContractInterface {
                     null
             );
         } else {
-            Map<String, Map<String, License>> allocatedLicenses = getAllocatedLicensesMap(ctx, req.getAssetId());
-            int total = 0;
-            for (Map<String, License> licenses : allocatedLicenses.values()) {
-                total += licenses.size();
+            // build a map with all allocated licenses: account -> orderId -> licenses
+            int total = availableLicenses.size();
+            Map<String, Map<String, Set<LicenseWithExpiration>>> allocatedLicenses = getAllocatedLicensesMap(ctx, req.getAssetId());
+            for (Map.Entry<String, Map<String, Set<LicenseWithExpiration>>> e : allocatedLicenses.entrySet()) {
+                for (Set<LicenseWithExpiration> value : e.getValue().values()) {
+                    total += value.size();
+                }
+            }
+
+            Set<String> availableLicenseIds = new HashSet<>();
+            for (License license : availableLicenses) {
+                availableLicenseIds.add(license.getId());
             }
 
             response = new AssetDetailResponse(
                     asset.getId(),
                     asset.getName(),
-                    asset.getAvailableLicenses().size(),
+                    availableLicenses.size(),
                     asset.getStartDate(),
                     asset.getEndDate(),
                     total,
-                    asset.getAvailableLicenses(),
+                    availableLicenseIds,
                     allocatedLicenses
             );
         }
 
         return response;
+    }
+    @Transaction
+    public String[] GetLicenseTxHistory(Context ctx) {
+        GetLicenseTxHistoryRequest req = new GetLicenseTxHistoryRequest(ctx);
+
+        // TODO NGAC
+
+        // get from adminmsp
+        LicenseKey key = new LicenseKey(req.getAssetId(), req.getLicenseId(), "");
+        byte[] bytes = ctx.getStub().getPrivateData(ADMINMSP_IPDC, key.toKey());
+        if (bytes.length == 0) {
+            throw new ChaincodeException("license " + req.getLicenseId() + " does not exist for asset " + req.getAssetId());
+        }
+
+        License license = License.fromByteArray(bytes);
+        key.setSalt(license.getSalt());
+        String hash = key.toHashKey();
+
+        try (QueryResultsIterator<KeyModification> historyForKey = ctx.getStub().getHistoryForKey(hash)) {
+            List<String> txIds = new ArrayList<>();
+            for (KeyModification next : historyForKey) {
+                txIds.add(next.getTxId());
+            }
+
+            return txIds.toArray(String[]::new);
+        } catch (Exception e) {
+            throw new ChaincodeException(e);
+        }
+    }
+
+    List<License> getAvailableLicenses(Context ctx, String assetId) {
+        String key = new LicenseKey(assetId, "", "").toKey();
+        try(QueryResultsIterator<KeyValue> licenseRange = getAssetQueryIterator(ctx, key)) {
+            List<License> licenses = new ArrayList<>();
+
+            for (KeyValue next : licenseRange) {
+                byte[] nextLicenseBytes = next.getValue();
+                License license = License.fromByteArray(nextLicenseBytes);
+                if (license.getAllocated() == null) {
+                    licenses.add(license);
+                }
+            }
+
+            return licenses;
+        } catch (Exception e) {
+            throw new ChaincodeException(e);
+        }
     }
 
     QueryResultsIterator<KeyValue> getAssetQueryIterator(Context ctx, String key) {
@@ -230,67 +315,29 @@ public class AssetContract implements ContractInterface {
         return Asset.fromByteArray(bytes);
     }
 
-    private boolean licenseExists(Context ctx, Asset asset, String licenseId) {
-        if (asset.getAvailableLicenses().contains(licenseId)) {
-            return true;
-        }
-
-        // check allocated
-        String key = allocatedKey(asset.getId(), "");
-        try(QueryResultsIterator<KeyValue> stateByRange = getAssetQueryIterator(ctx, key)) {
-            for (KeyValue next : stateByRange) {
-                byte[] value = next.getValue();
-
-                AllocatedLicenses allocatedLicenses = SerializationUtils.deserialize(value);
-                if (allocatedLicenses.getLicenses().contains(licenseId)) {
-                    return true;
-                }
-            }
-
-            return false;
-        } catch (Exception e) {
-            throw new ChaincodeException(e);
-        }
+    private boolean licenseExists(Context ctx, LicenseKey licenseKey) {
+        return ctx.getStub().getPrivateData(ADMINMSP_IPDC, licenseKey.toString()).length != 0;
     }
 
-    private String getLicenseAllocatedTo(Context ctx, String assetId, String licenseId) {
-        try(QueryResultsIterator<KeyValue> stateByRange = getAssetQueryIterator(ctx, allocatedKey(assetId, ""))) {
-            for (KeyValue next : stateByRange) {
-                byte[] value = next.getValue();
-
-                AllocatedLicenses allocatedLicenses = SerializationUtils.deserialize(value);
-                if (allocatedLicenses.getLicenses().contains(licenseId)) {
-                    return allocatedLicenses.getAccount();
-                }
-            }
-
-            return null;
-        } catch (Exception e) {
-            throw new ChaincodeException(e);
-        }
-    }
-
-    private Map<String, Map<String, License>> getAllocatedLicensesMap(Context ctx, String assetId) {
-        try(QueryResultsIterator<KeyValue> stateByRange = getAssetQueryIterator(ctx, allocatedKey(assetId, ""))) {
+    private Map<String, Map<String, Set<LicenseWithExpiration>>> getAllocatedLicensesMap(Context ctx, String assetId) {
+        LicenseKey key = new LicenseKey(assetId, "", "");
+        try(QueryResultsIterator<KeyValue> stateByRange = getAssetQueryIterator(ctx, key.toKey())) {
             // account -> order -> licenses
-            Map<String, Map<String, License>> map = new HashMap<>();
+            Map<String, Map<String, Set<LicenseWithExpiration>>> map = new HashMap<>();
 
             for (KeyValue next : stateByRange) {
                 byte[] value = next.getValue();
 
-                AllocatedLicenses allocatedLicenses = SerializationUtils.deserialize(value);
-                Map<String, License> licenses = map.getOrDefault(allocatedLicenses.getAccount(), new HashMap<>());
-                for (String licenseId : allocatedLicenses.getLicenses()) {
-                    licenses.put(
-                            allocatedLicenses.getOrderId(),
-                            new License(
-                                    licenseId,
-                                    new Allocated(allocatedLicenses.getAccount(), allocatedLicenses.getExpiration(), allocatedLicenses.getOrderId())
-                            )
-                    );
+                License license = License.fromByteArray(value);
+                if (license.getAllocated() == null) {
+                    continue;
                 }
 
-                map.put(allocatedLicenses.getAccount(), licenses);
+                Map<String, Set<LicenseWithExpiration>> accountLicenses = map.getOrDefault(license.getAllocated().getAccount(), new HashMap<>());
+                Set<LicenseWithExpiration> orderLicenses = accountLicenses.getOrDefault(license.getAllocated().getOrderId(), new HashSet<>());
+                orderLicenses.add(new LicenseWithExpiration(license.getId(), license.getAllocated().getExpiration()));
+                accountLicenses.put(license.getAllocated().getOrderId(), orderLicenses);
+                map.put(license.getAllocated().getAccount(), accountLicenses);
             }
 
             return map;

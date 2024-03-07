@@ -15,10 +15,13 @@ public class License implements Serializable {
     @Property
     private String id;
     @Property
+    private String salt;
+    @Property
     private Allocated allocated;
 
-    public License(@JsonProperty String id, @JsonProperty Allocated allocated) {
+    public License(@JsonProperty String id, @JsonProperty String salt, @JsonProperty Allocated allocated) {
         this.id = id;
+        this.salt = salt;
         this.allocated = allocated;
     }
 
@@ -28,6 +31,14 @@ public class License implements Serializable {
 
     public void setId(String id) {
         this.id = id;
+    }
+
+    public String getSalt() {
+        return salt;
+    }
+
+    public void setSalt(String salt) {
+        this.salt = salt;
     }
 
     public Allocated getAllocated() {
@@ -46,6 +57,7 @@ public class License implements Serializable {
     public String toString() {
         return "License{" +
                 "id='" + id + '\'' +
+                ", salt='" + salt + '\'' +
                 ", allocated=" + allocated +
                 '}';
     }

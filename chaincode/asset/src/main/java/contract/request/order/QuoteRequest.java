@@ -1,5 +1,6 @@
 package contract.request.order;
 
+import com.google.gson.Gson;
 import model.Quote;
 import org.hyperledger.fabric.contract.Context;
 import org.hyperledger.fabric.shim.ChaincodeException;
@@ -7,59 +8,43 @@ import org.hyperledger.fabric.shim.ChaincodeException;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Objects;
 
 public class QuoteRequest {
 
     private String orderId;
-    private String account;
+    private final String account;
     private String assetId;
     private int amount;
     private int duration;
     private double price;
 
-    public QuoteRequest(Context ctx) {
-        Map<String, byte[]> t = ctx.getStub().getTransient();
+    public QuoteRequest(Context ctx, boolean isRequest) {
+        this(new Gson().fromJson(
+                new String(ctx.getStub().getTransient().get("request"), StandardCharsets.UTF_8),
+                QuoteRequest.class), isRequest);
+    }
 
-        // a quote request is either a renewal -- orderId and optionally price if sending quote
-        // or a new order -- with params
-        byte[] bytes = t.get("orderId");
-        if (bytes != null && bytes.length > 0) {
-            orderId = new String(bytes, StandardCharsets.UTF_8);
+    private QuoteRequest(QuoteRequest req, boolean isRequest) {
+        this.account = Objects.requireNonNull(req.getAccount(), "account cannot be null");
 
-            bytes = t.get("account");
-            if (bytes != null && bytes.length > 0) {
-                throw new IllegalArgumentException("account cannot be null");
+        if (isRequest) {
+            this.assetId = Objects.requireNonNull(req.getAssetId(), "assetId cannot be null");
+            this.amount = req.getAmount();
+            if (amount == 0) {
+                throw new IllegalArgumentException("amount cannot be 0");
             }
 
-            bytes = t.get("price");
-            if (bytes != null && bytes.length > 0) {
-                price = Double.parseDouble(new String(bytes, StandardCharsets.UTF_8));
+            this.duration = req.getDuration();
+            if (duration == 0) {
+                throw new IllegalArgumentException("duration cannot be 0");
             }
         } else {
-            bytes = t.get("account");
-            if (bytes == null) {
-                throw new IllegalArgumentException("account cannot be null");
+            this.orderId = Objects.requireNonNull(req.getOrderId(), "orderId cannot be null");
+            this.price = req.getPrice();
+            if (price == 0) {
+                throw new IllegalArgumentException("price cannot be 0");
             }
-            account = new String(bytes, StandardCharsets.UTF_8);
-
-            // if new order, params cannot be null
-            bytes = t.get("assetId");
-            if (bytes == null) {
-                throw new IllegalArgumentException("assetId cannot be null");
-            }
-            assetId = new String(bytes, StandardCharsets.UTF_8);
-
-            bytes = t.get("amount");
-            if (bytes == null) {
-                throw new IllegalArgumentException("amount cannot be null");
-            }
-            amount = Integer.parseInt(new String(bytes, StandardCharsets.UTF_8));
-
-            bytes = t.get("duration");
-            if (bytes == null) {
-                throw new IllegalArgumentException("duration cannot be null");
-            }
-            duration = Integer.parseInt(new String(bytes, StandardCharsets.UTF_8));
         }
     }
 

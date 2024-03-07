@@ -1,4 +1,4 @@
-package contract.request.asset;
+package contract.response;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import model.AllocatedLicenses;

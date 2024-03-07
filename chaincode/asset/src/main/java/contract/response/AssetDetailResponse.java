@@ -1,8 +1,8 @@
 package contract.response;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import model.Asset;
 import model.License;
+import model.LicenseWithExpiration;
 import org.hyperledger.fabric.contract.annotation.DataType;
 import org.hyperledger.fabric.contract.annotation.Property;
 
@@ -28,7 +28,7 @@ public class AssetDetailResponse {
     @Property
     private Set<String> availableLicenses;
     @Property
-    private Map<String, Map<String, License>> allocatedLicenses;
+    private Map<String, Map<String, Set<LicenseWithExpiration>>> allocatedLicenses;
 
     public AssetDetailResponse(@JsonProperty String id,
                                @JsonProperty String name,
@@ -37,7 +37,7 @@ public class AssetDetailResponse {
                                @JsonProperty String endDate,
                                @JsonProperty int totalAmount,
                                @JsonProperty Set<String> availableLicenses,
-                               @JsonProperty Map<String, Map<String, License>> allocatedLicenses) {
+                               @JsonProperty Map<String, Map<String, Set<LicenseWithExpiration>>> allocatedLicenses) {
         this.id = id;
         this.name = name;
         this.numAvailable = numAvailable;
@@ -104,11 +104,11 @@ public class AssetDetailResponse {
         this.availableLicenses = availableLicenses;
     }
 
-    public Map<String, Map<String, License>> getAllocatedLicenses() {
+    public Map<String, Map<String, Set<LicenseWithExpiration>>> getAllocatedLicenses() {
         return allocatedLicenses;
     }
 
-    public void setAllocatedLicenses(Map<String, Map<String, License>> allocatedLicenses) {
+    public void setAllocatedLicenses(Map<String, Map<String, Set<LicenseWithExpiration>>> allocatedLicenses) {
         this.allocatedLicenses = allocatedLicenses;
     }
 

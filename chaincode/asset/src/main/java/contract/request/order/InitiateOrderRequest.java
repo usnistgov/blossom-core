@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 public class InitiateOrderRequest {
 
@@ -30,38 +31,24 @@ public class InitiateOrderRequest {
     }
 
     public InitiateOrderRequest(Context ctx) {
-        Map<String, byte[]> t = ctx.getStub().getTransient();
+        this(new Gson().fromJson(
+                new String(ctx.getStub().getTransient().get("request"), StandardCharsets.UTF_8),
+                InitiateOrderRequest.class));
+    }
 
-        byte[] bytes = t.get("orderId");
-        if (bytes != null && bytes.length > 0) {
-            this.orderId = new String(bytes, StandardCharsets.UTF_8);
-        } else {
-            this.orderId = null;
+    private InitiateOrderRequest(InitiateOrderRequest req) {
+        this.orderId = Objects.requireNonNull(req.orderId, "orderId cannot be null");
+        this.account = Objects.requireNonNull(req.account, "account cannot be null");
+        this.assetId = Objects.requireNonNull(req.assetId, "assetId cannot be null");
+        this.amount = req.amount;
+        if (amount == 0) {
+            throw new IllegalArgumentException("amount cannot be 0");
         }
 
-        bytes = t.get("account");
-        if (bytes == null) {
-            throw new IllegalArgumentException("account cannot be null");
+        this.duration = req.duration;
+        if (duration == 0) {
+            throw new IllegalArgumentException("duration cannot be 0");
         }
-        account = new String(bytes, StandardCharsets.UTF_8);
-
-        bytes = t.get("assetId");
-        if (bytes == null) {
-            throw new IllegalArgumentException("assetId cannot be null");
-        }
-        assetId = new String(bytes, StandardCharsets.UTF_8);
-
-        bytes = t.get("amount");
-        if (bytes == null) {
-            throw new IllegalArgumentException("amount cannot be null");
-        }
-        amount = Integer.parseInt(new String(bytes, StandardCharsets.UTF_8));
-
-        bytes = t.get("duration");
-        if (bytes == null) {
-            throw new IllegalArgumentException("duration cannot be null");
-        }
-        duration = Integer.parseInt(new String(bytes, StandardCharsets.UTF_8));
     }
 
     public String getAccount() {

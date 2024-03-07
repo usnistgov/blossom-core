@@ -1,9 +1,11 @@
 package contract.request.asset;
 
+import com.google.gson.Gson;
 import org.hyperledger.fabric.contract.Context;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Objects;
 
 public class AssetIdAndAccountRequest {
 
@@ -11,21 +13,14 @@ public class AssetIdAndAccountRequest {
     private final String account;
 
     public AssetIdAndAccountRequest(Context ctx) {
-        Map<String, byte[]> t = ctx.getStub().getTransient();
+        this(new Gson().fromJson(
+                new String(ctx.getStub().getTransient().get("request"), StandardCharsets.UTF_8),
+                AssetIdAndAccountRequest.class));
+    }
 
-        byte[] bytes = t.get("assetId");
-        if (bytes == null) {
-            throw new IllegalArgumentException("assetId cannot be null");
-        }
-
-        this.assetId = new String(bytes, StandardCharsets.UTF_8);
-
-        bytes = t.get("account");
-        if (bytes == null) {
-            throw new IllegalArgumentException("account cannot be null");
-        }
-
-        this.account = new String(bytes, StandardCharsets.UTF_8);
+    private AssetIdAndAccountRequest(AssetIdAndAccountRequest req) {
+        this.assetId = Objects.requireNonNull(req.assetId, "assetId cannot be null");
+        this.account = Objects.requireNonNull(req.account, "account cannot be null");
     }
 
     public String getAssetId() {

@@ -1,38 +1,27 @@
 package contract.request.asset;
 
+import com.google.gson.Gson;
 import model.DateFormatter;
 import org.hyperledger.fabric.contract.Context;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Objects;
 
 public class UpdateEndDateRequest {
 
     private final String assetId;
     private final String newEndDate;
 
-    public UpdateEndDateRequest(String assetId, String newEndDate) {
-        this.assetId = assetId;
-        this.newEndDate = newEndDate;
+    public UpdateEndDateRequest(Context ctx) {
+        this(new Gson().fromJson(
+                new String(ctx.getStub().getTransient().get("request"), StandardCharsets.UTF_8),
+                UpdateEndDateRequest.class));
     }
 
-    public UpdateEndDateRequest(Context ctx) {
-        Map<String, byte[]> t = ctx.getStub().getTransient();
-
-        byte[] bytes = t.get("assetId");
-        if (bytes == null) {
-            throw new IllegalArgumentException("assetId cannot be null");
-        }
-
-        assetId = new String(bytes, StandardCharsets.UTF_8);
-
-        bytes = t.get("newEndDate");
-        if (bytes == null) {
-            throw new IllegalArgumentException("newEndDate cannot be null");
-        }
-
-        newEndDate = new String(bytes, StandardCharsets.UTF_8);
-        DateFormatter.checkDateFormat(this.newEndDate);
+    private UpdateEndDateRequest(UpdateEndDateRequest req) {
+        this.assetId = Objects.requireNonNull(req.assetId, "assetId cannot be null");
+        this.newEndDate = Objects.requireNonNull(req.newEndDate, "newEndDate cannot be null");
     }
 
     public String getAssetId() {
