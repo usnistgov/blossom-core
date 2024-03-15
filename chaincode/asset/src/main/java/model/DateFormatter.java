@@ -6,6 +6,7 @@ import org.hyperledger.fabric.shim.ChaincodeException;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -28,4 +29,10 @@ public class DateFormatter {
             throw new ChaincodeException("expected format YYYY-MM-DD, received " + date);
         }
     }
+
+    public static boolean isExpired(Instant txTs, String expiration) {
+        Instant exp = Instant.from(DATE_TIME_FORMATTER.parse(expiration));
+        return txTs.isAfter(exp);
+    }
+
 }

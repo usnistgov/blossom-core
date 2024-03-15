@@ -1,10 +1,10 @@
 package contract;
 
-import contract.request.asset.*;
+import contract.request.*;
 import contract.response.AssetDetailResponse;
 import contract.response.AssetResponse;
 import model.*;
-import ngac.AssetPDP;
+import ngac.PDP;
 import org.hyperledger.fabric.contract.Context;
 import org.hyperledger.fabric.contract.ContractInterface;
 import org.hyperledger.fabric.contract.annotation.Contract;
@@ -15,10 +15,11 @@ import org.hyperledger.fabric.shim.ledger.KeyModification;
 import org.hyperledger.fabric.shim.ledger.KeyValue;
 import org.hyperledger.fabric.shim.ledger.QueryResultsIterator;
 
+import java.time.Instant;
 import java.util.*;
 
-import static model.LicenseKey.LICENSE_PREFIX;
-import static ngac.PDP.ADMINMSP;
+import static model.DateFormatter.isExpired;
+import static ngac.PolicyBuilder.ADMINMSP;
 
 @Contract(
         name = "asset",
@@ -41,14 +42,12 @@ public class AssetContract implements ContractInterface {
         return ASSET_PREFIX + assetId;
     }
 
-    private AssetPDP assetPDP = new AssetPDP();
-
     // use transient for license ids
     @Transaction
     public String AddAsset(Context ctx) {
         AddAssetRequest req = new AddAssetRequest(ctx);
 
-        // TODO NGAC
+        PDP.canWriteAsset(ctx);
 
         String id = ctx.getStub().getTxId();
         String startDate = DateFormatter.getFormattedTimestamp(ctx);
@@ -83,7 +82,7 @@ public class AssetContract implements ContractInterface {
 
     @Transaction
     public void AddLicenses(Context ctx) {
-        // TODO NGAC
+        PDP.canWriteAsset(ctx);
 
         // get asset info from transient data field
         AddLicensesRequest req = new AddLicensesRequest(ctx);
@@ -115,7 +114,7 @@ public class AssetContract implements ContractInterface {
 
     @Transaction
     public void RemoveLicenses(Context ctx) {
-        // TODO NGAC
+        PDP.canWriteAsset(ctx);
 
         // get asset info from transient data field
         RemoveLicensesRequest req = new RemoveLicensesRequest(ctx);
@@ -124,7 +123,7 @@ public class AssetContract implements ContractInterface {
         Asset asset = getAsset(ctx, req.getAssetId());
 
         // remove licenses from adminmsp ipdc as long as they exist and are not allocated
-        for (String licenseId : req.getLicenseIds()) {
+        for (String licenseId : req.getLicenses()) {
             LicenseKey key = new LicenseKey(asset.getId(), licenseId, "");
 
             byte[] bytes = ctx.getStub().getPrivateData(ADMINMSP_IPDC, key.toKey());
@@ -148,7 +147,7 @@ public class AssetContract implements ContractInterface {
 
     @Transaction
     public void UpdateEndDate(Context ctx) {
-        // TODO NGAC
+        PDP.canWriteAsset(ctx);
 
         UpdateEndDateRequest req = new UpdateEndDateRequest(ctx);
 
@@ -164,12 +163,27 @@ public class AssetContract implements ContractInterface {
 
     @Transaction
     public void RemoveAsset(Context ctx) {
-        // TODO NGAC
+        PDP.canWriteAsset(ctx);
 
         AssetIdRequest req = new AssetIdRequest(ctx);
 
         // check asset exists
         getAsset(ctx, req.getAssetId());
+
+        // check that the asset does not have allocated licenses that are not expired
+        Instant txTs = ctx.getStub().getTxTimestamp();
+        Map<String, Map<String, Set<LicenseWithExpiration>>> allocatedLicenses = getAllocatedLicensesMap(ctx, req.getAssetId());
+        if (!allocatedLicenses.isEmpty()) {
+            for (Map<String, Set<LicenseWithExpiration>> orderLicenses : allocatedLicenses.values()) {
+                for (Set<LicenseWithExpiration> s : orderLicenses.values()) {
+                    for (LicenseWithExpiration l : s) {
+                        if (isExpired(txTs, l.getExpiration())) {
+                           throw new ChaincodeException("asset " + req.getAssetId() + " has allocated licenses that have not expired");
+                        }
+                    }
+                }
+            }
+        }
 
         // delete asset state
         ctx.getStub().delPrivateData(ADMINMSP_IPDC, assetKey(req.getAssetId()));
@@ -177,7 +191,7 @@ public class AssetContract implements ContractInterface {
 
     @Transaction
     public AssetResponse[] GetAssets(Context ctx) {
-        // TODO NGAC
+        PDP.canReadAssets(ctx);
 
         List<AssetResponse> assets = new ArrayList<>();
 
@@ -206,59 +220,43 @@ public class AssetContract implements ContractInterface {
 
     @Transaction
     public AssetDetailResponse GetAsset(Context ctx) {
-        // TODO NGAC
-
         AssetIdRequest req = new AssetIdRequest(ctx);
 
         Asset asset = getAsset(ctx, req.getAssetId());
         List<License> availableLicenses = getAvailableLicenses(ctx, asset.getId());
 
-        AssetDetailResponse response;
-        if (false) {// TODO NGAC Check
-            response = new AssetDetailResponse(
-                    asset.getId(),
-                    asset.getName(),
-                    availableLicenses.size(),
-                    asset.getStartDate(),
-                    asset.getEndDate(),
-                    0,
-                    null,
-                    null
-            );
-        } else {
-            // build a map with all allocated licenses: account -> orderId -> licenses
-            int total = availableLicenses.size();
-            Map<String, Map<String, Set<LicenseWithExpiration>>> allocatedLicenses = getAllocatedLicensesMap(ctx, req.getAssetId());
-            for (Map.Entry<String, Map<String, Set<LicenseWithExpiration>>> e : allocatedLicenses.entrySet()) {
-                for (Set<LicenseWithExpiration> value : e.getValue().values()) {
-                    total += value.size();
-                }
+        // build a map with all allocated licenses: account -> orderId -> licenses
+        int total = availableLicenses.size();
+        Map<String, Map<String, Set<LicenseWithExpiration>>> allocatedLicenses = getAllocatedLicensesMap(ctx, req.getAssetId());
+        for (Map.Entry<String, Map<String, Set<LicenseWithExpiration>>> e : allocatedLicenses.entrySet()) {
+            for (Set<LicenseWithExpiration> value : e.getValue().values()) {
+                total += value.size();
             }
-
-            Set<String> availableLicenseIds = new HashSet<>();
-            for (License license : availableLicenses) {
-                availableLicenseIds.add(license.getId());
-            }
-
-            response = new AssetDetailResponse(
-                    asset.getId(),
-                    asset.getName(),
-                    availableLicenses.size(),
-                    asset.getStartDate(),
-                    asset.getEndDate(),
-                    total,
-                    availableLicenseIds,
-                    allocatedLicenses
-            );
         }
 
-        return response;
+        Set<String> availableLicenseIds = new HashSet<>();
+        for (License license : availableLicenses) {
+            availableLicenseIds.add(license.getId());
+        }
+
+        AssetDetailResponse response = new AssetDetailResponse(
+                asset.getId(),
+                asset.getName(),
+                availableLicenses.size(),
+                asset.getStartDate(),
+                asset.getEndDate(),
+                total,
+                availableLicenseIds,
+                allocatedLicenses
+        );
+
+        return PDP.filterAssetDetail(ctx, response);
     }
     @Transaction
     public String[] GetLicenseTxHistory(Context ctx) {
         GetLicenseTxHistoryRequest req = new GetLicenseTxHistoryRequest(ctx);
 
-        // TODO NGAC
+        PDP.canReadAssetDetail(ctx);
 
         // get from adminmsp
         LicenseKey key = new LicenseKey(req.getAssetId(), req.getLicenseId(), "");

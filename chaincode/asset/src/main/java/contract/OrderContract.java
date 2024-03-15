@@ -1,11 +1,11 @@
 package contract;
 
-import contract.request.asset.AssetIdAndAccountRequest;
-import contract.request.asset.AssetIdRequest;
-import contract.request.order.*;
-import contract.response.OrderResponse;
+import contract.request.*;
+import contract.response.AllocateLicensesResponse;
+import contract.response.IdResponse;
 import model.*;
-import org.apache.commons.lang3.SerializationUtils;
+import ngac.PDP;
+import ngac.UnauthorizedException;
 import org.hyperledger.fabric.contract.Context;
 import org.hyperledger.fabric.contract.ContractInterface;
 import org.hyperledger.fabric.contract.annotation.Contract;
@@ -15,19 +15,17 @@ import org.hyperledger.fabric.shim.ChaincodeException;
 import org.hyperledger.fabric.shim.ledger.KeyValue;
 import org.hyperledger.fabric.shim.ledger.QueryResultsIterator;
 
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.*;
 
 import static contract.AssetContract.*;
-import static contract.SWIDContract.swidKey;
-import static model.AllocatedLicenses.ALLOCATED_PREFIX;
-import static model.AllocatedLicenses.allocatedKey;
 import static model.DateFormatter.DATE_TIME_FORMATTER;
 import static java.time.ZoneOffset.UTC;
+import static contract.request.LicensesRequest.allocateRequestKey;
+import static model.DateFormatter.isExpired;
 import static model.Order.Status.*;
+import static model.SHA256.EMPTY_HASH_BYTES;
 
 @Contract(
         name = "order",
@@ -48,8 +46,10 @@ public class OrderContract implements ContractInterface {
     private AssetContract assetContract = new AssetContract();
 
     @Transaction
-    public String GetQuote(Context ctx) {
+    public IdResponse GetQuote(Context ctx) {
         QuoteRequest req = new QuoteRequest(ctx, true);
+
+        PDP.canInitiateOrder(ctx, req.getAccount());
 
         String account = ctx.getClientIdentity().getMSPID();
         String orderId = req.getOrderId();
@@ -69,21 +69,25 @@ public class OrderContract implements ContractInterface {
                               "",
                               "",
                               req.getAssetId(),
+                              req.getAmount(),
+                              req.getDuration(),
                               0,
-                              0,
-                              0
+                              null,
+                              null
             );
         }
 
         String key = orderKey(order.getAccount(), order.getId());
         ctx.getStub().putPrivateData(ADMINMSP_IPDC, key, order.toByteArray());
 
-        return orderId;
+        return new IdResponse(orderId);
     }
 
     @Transaction
-    public void SendQuote(Context ctx) {
+    public IdResponse SendQuote(Context ctx) {
         QuoteRequest req = new QuoteRequest(ctx, false);
+
+        PDP.canAllocateLicense(ctx);
 
         String orderId = req.getOrderId();
         Order order = getOrder(ctx, orderId, req.getAccount());
@@ -99,13 +103,15 @@ public class OrderContract implements ContractInterface {
 
         String key = orderKey(order.getAccount(), order.getId());
         ctx.getStub().putPrivateData(ADMINMSP_IPDC, key, order.toByteArray());
+
+        return new IdResponse(orderId);
     }
 
     @Transaction
-    public String InitiateOrder(Context ctx) {
-        InitiateOrderRequest request = new InitiateOrderRequest(ctx);
+    public IdResponse InitiateOrder(Context ctx) {
+        OrderIdAndAccountRequest request = new OrderIdAndAccountRequest(ctx);
 
-        // TODO NGAC
+        PDP.canInitiateOrder(ctx, request.getAccount());
 
         String account = request.getAccount();
         Order order = getOrder(ctx, request.getOrderId(), account);
@@ -115,25 +121,25 @@ public class OrderContract implements ContractInterface {
             throw new ChaincodeException("order " + order.getId() + " has not received a quote");
         }
 
-        // renew the order only if this existing order is in a renewal stage, otherwise initiate it
         if (order.getStatus().equals(RENEWAL_QUOTE_RECEIVED)) {
-            order = renewOrder(ctx, account, request);
+            order.setStatus(RENEWAL_INITIATED);
         } else {
-            order = initiateOrder(ctx, request);
+            order.setInitiationDate(DATE_TIME_FORMATTER.format(ctx.getStub().getTxTimestamp()));
+            order.setStatus(INITIATED);
         }
 
         // write order to the ADMIN IPDC
         String key = orderKey(order.getAccount(), order.getId());
         ctx.getStub().putPrivateData(ADMINMSP_IPDC, key, order.toByteArray());
 
-        return order.getId();
+        return new IdResponse(order.getId());
     }
 
     @Transaction
-    public void ApproveOrder(Context ctx) {
+    public IdResponse ApproveOrder(Context ctx) {
         OrderIdAndAccountRequest req = new OrderIdAndAccountRequest(ctx);
 
-        // TODO NGAC
+        PDP.canApproveOrder(ctx, req.getAccount());
 
         Order order = getOrder(ctx, req.getOrderId(), req.getAccount());
 
@@ -149,24 +155,35 @@ public class OrderContract implements ContractInterface {
 
         String key = orderKey(order.getAccount(), order.getId());
         ctx.getStub().putPrivateData(ADMINMSP_IPDC, key, order.toByteArray());
+
+        return new IdResponse(order.getId());
     }
 
     @Transaction
     public void DenyOrder(Context ctx) {
         OrderIdAndAccountRequest req = new OrderIdAndAccountRequest(ctx);
 
-        // TODO NGAC
+        PDP.canDenyOrder(ctx, req.getAccount());
 
         Order order = getOrder(ctx, req.getOrderId(), req.getAccount());
-        order.setStatus(Order.Status.DENIED);
+
+        if (order.getStatus().equals(RENEWAL_INITIATED)) {
+            order.setStatus(RENEWAL_DENIED);
+        } else if (order.getStatus().equals(INITIATED)) {
+            order.setStatus(DENIED);
+        } else {
+            throw new ChaincodeException("order " + order.getId() + " is not up for approval");
+        }
 
         String key = orderKey(order.getAccount(), order.getId());
         ctx.getStub().putPrivateData(ADMINMSP_IPDC, key, order.toByteArray());
     }
 
     @Transaction
-    public String[] GetLicensesToAllocateForOrder(Context ctx) {
+    public AllocateLicensesResponse GetLicensesToAllocateForOrder(Context ctx) {
         OrderIdAndAccountRequest req = new OrderIdAndAccountRequest(ctx);
+
+        PDP.canAllocateLicense(ctx);
 
         Order order = getOrder(ctx, req.getOrderId(), req.getAccount());
         Order.Status status = order.getStatus();
@@ -186,15 +203,15 @@ public class OrderContract implements ContractInterface {
             licensesToAllocate.add(availableLicenses.get(i).getId());
         }
 
-        return licensesToAllocate.toArray(String[]::new);
+        return new AllocateLicensesResponse(req.getOrderId(), req.getAccount(), licensesToAllocate);
     }
 
     @Transaction
-    public AllocatedLicenses AllocateLicenses(Context ctx) {
+    public LicensesRequest AllocateLicenses(Context ctx) {
         AllocateLicensesRequest req = new AllocateLicensesRequest(ctx);
 
-        // TODO NGAC
-
+        PDP.canAllocateLicense(ctx);
+        
         Order order = getOrder(ctx, req.getOrderId(), req.getAccount());
 
         // check that the order is ready to be allocated
@@ -203,19 +220,32 @@ public class OrderContract implements ContractInterface {
             throw new ChaincodeException("cannot allocate licenses for an order that has not been approved");
         }
 
-        AllocatedLicenses allocatedLicenses;
-        if (status.equals(RENEWAL_APPROVED)) {
-            allocatedLicenses = allocateRenewalLicenses(ctx, order);
-        } else {
-            allocatedLicenses = allocateLicenses(ctx, order, req.getLicenses());
-        }
+        // compute expiration date
+        int duration = order.getDuration();
+        String expiration = DATE_TIME_FORMATTER.format(
+                ctx.getStub()
+                   .getTxTimestamp()
+                   .atZone(ZoneId.from(UTC))
+                   .plusYears(duration)
+                   .toInstant()
+        );
 
-        // mark order as completed and set date
-        order.setStatus(Order.Status.ALLOCATED);
-
+        // update order to reflect allocation
+        // mark order as completed and set date, expiration, and licenses
         String ts = DateFormatter.getFormattedTimestamp(ctx);
         order.setAllocatedDate(ts);
         order.setLatestRenewalDate(ts);
+        order.setStatus(Order.Status.ALLOCATED);
+        order.setExpiration(expiration);
+
+        // allocate new licenses or update expiration for renewal
+        // if renewal the licenses will be in the Order object not in the request
+        if (status.equals(RENEWAL_APPROVED)) {
+             allocateRenewalLicenses(ctx, order);
+        } else {
+             allocateLicenses(ctx, order, req.getLicenses());
+             order.setLicenses(req.getLicenses());
+        }
 
         // update order
         ctx.getStub().putPrivateData(
@@ -224,118 +254,143 @@ public class OrderContract implements ContractInterface {
                 order.toByteArray()
         );
 
-        return allocatedLicenses;
+        // create allocate request in ADMINMSP
+        LicensesRequest licensesRequest = new LicensesRequest(order.getAccount(), order.getAssetId(), order.getId(), order.getExpiration(), order.getLicenses());
+        ctx.getStub().putPrivateData(ADMINMSP_IPDC, allocateRequestKey(LicensesRequest.ACTION.ALLOCATE, order.getId()), licensesRequest.toByteArray());
+
+        // return the licenses request as that will be the input to the send licenses method
+        return licensesRequest;
+    }
+
+    @Transaction
+    public LicensesRequest GetAllocateRequestForOrder(Context ctx) {
+        OrderIdRequest req = new OrderIdRequest(ctx);
+
+        PDP.canAllocateLicense(ctx);
+
+        byte[] bytes = ctx.getStub().getPrivateData(ADMINMSP_IPDC, allocateRequestKey(LicensesRequest.ACTION.ALLOCATE, req.getOrderId()));
+        if (bytes.length == 0) {
+            throw new ChaincodeException("no allocate request exists for order " + req.getOrderId());
+        }
+
+        return LicensesRequest.fromByteArray(bytes);
     }
 
     @Transaction
     public void SendLicenses(Context ctx) {
-        AllocatedLicenses req = new AllocatedLicenses(ctx);
+        LicensesRequest req = new LicensesRequest(ctx);
 
-        // todo NGAC
-
+        PDP.canAllocateLicense(ctx);
+        
         // check hash vs private data on adminmsp ipdc to verify the licenses being sent were the ones allocated
-        byte[] pvtDataHash = ctx.getStub().getPrivateDataHash(ADMINMSP_IPDC, allocatedKey(req.getAssetId(), req.getOrderId()));
-        byte[] hash = SHA256.hashBytesToBytes(SerializationUtils.serialize(req));
-        if (Arrays.equals(pvtDataHash, hash)) {
+        byte[] pvtDataHash = ctx.getStub().getPrivateDataHash(ADMINMSP_IPDC, allocateRequestKey(LicensesRequest.ACTION.ALLOCATE, req.getOrderId()));
+        byte[] hash = SHA256.hashBytesToBytes(req.toByteArray());
+        if (!Arrays.equals(pvtDataHash, hash)) {
             throw new ChaincodeException("provided licenses to send do not match the licenses allocated");
         }
 
-        // save the licenses for this order in the accounts IPDC
-        ctx.getStub().putPrivateData(
-                accountIPDC(req.getAccount()),
-                allocatedKey(req.getAssetId(), req.getOrderId()),
-                SerializationUtils.serialize(req)
-        );
+        // delete request
+        ctx.getStub().delPrivateData(ADMINMSP_IPDC, allocateRequestKey(LicensesRequest.ACTION.ALLOCATE, req.getOrderId()));
+
+        // put in ORG
+        String collection = accountIPDC(req.getAccount());
+        for (String licenseId : req.getLicenses()) {
+            LicenseKey lk = new LicenseKey(req.getAssetId(), licenseId, "");
+            Allocated allocated = new Allocated(licenseId, req.getAccount(), req.getExpiration(), req.getOrderId());
+            ctx.getStub().putPrivateData(collection, lk.toKey(), allocated.toByteArray());
+        }
     }
 
     @Transaction
-    public void DeleteOrder(Context ctx) {
-        OrderIdAndAccountRequest request = new OrderIdAndAccountRequest(ctx);
+    public void InitiateReturn(Context ctx) {
+        LicensesRequest req = new LicensesRequest(ctx);
+
+        PDP.canReturnLicense(ctx, req.getAccount());
 
         // TODO NGAC
 
-        Order order = getOrder(ctx, request.getOrderId(), request.getAccount());
+        // check that a request for this order is not already active
+        String key = allocateRequestKey(LicensesRequest.ACTION.DEALLOCATE, req.getOrderId());
+        byte[] hash = ctx.getStub().getPrivateDataHash(accountIPDC(req.getAccount()), key);
+        if (Arrays.equals(hash, EMPTY_HASH_BYTES)) {
+            throw new ChaincodeException("a request to return licenses for order " + req.getOrderId() + " is already active");
+        }
 
-        // orders can only be deleted when all allocated licenses are returned
-        byte[] bytes = ctx.getStub().getPrivateData(ADMINMSP_IPDC, allocatedKey(order.getAssetId(), order.getId()));
-        if (bytes.length > 0) {
-            AllocatedLicenses allocatedLicenses = SerializationUtils.deserialize(bytes);
-            if (!allocatedLicenses.getLicenses().isEmpty()) {
-                throw new ChaincodeException("all licenses must be returned before an order is deleted");
+        // check that each licenses exists in ORG using hash
+        for (String licenseId : req.getLicenses()) {
+            LicenseKey lk = new LicenseKey(req.getAssetId(), licenseId, "");
+            hash = ctx.getStub().getPrivateDataHash(accountIPDC(req.getAccount()), lk.toKey());
+            if (Arrays.equals(hash, EMPTY_HASH_BYTES)) {
+                // it's ok to provide a specific error because only users of the org will get here
+                throw new ChaincodeException("license " + licenseId + " is not checked out by " + req.getAccount());
             }
         }
 
-        // delete order
-        ctx.getStub().delPrivateData(ADMINMSP_IPDC, orderKey(order.getAccount(), request.getOrderId()));
+        // submit deallocate request to ADMINMSP,
+        ctx.getStub().putPrivateData(ADMINMSP_IPDC, key, req.toByteArray());
     }
 
     @Transaction
-    public void ReturnLicenses(Context ctx) {
-        ReturnLicensesRequest req = new ReturnLicensesRequest(ctx);
+    public LicensesRequest GetInitiatedReturnForOrder(Context ctx) {
+        OrderIdRequest req = new OrderIdRequest(ctx);
 
-        // todo NGAC
+        PDP.canAllocateLicense(ctx);
 
-        String allocatedAccount = req.getAccount();
-        String collection = accountIPDC(allocatedAccount);
-
-        // get allocated from account IPDC to check for swids
-        String allocatedKey = allocatedKey(req.getAssetId(), req.getOrderId());
-        byte[] bytes = ctx.getStub().getPrivateData(collection, allocatedKey);
-        AllocatedLicenses allocatedLicenses = SerializationUtils.deserialize(bytes);
-
-        // delete a swid associated with this license if there is one
-        for (String license : req.getLicenses()) {
-            ctx.getStub().delPrivateData(collection, swidKey(license));
+        byte[] bytes = ctx.getStub().getPrivateData(ADMINMSP_IPDC, allocateRequestKey(LicensesRequest.ACTION.DEALLOCATE, req.getOrderId()));
+        if (bytes.length == 0) {
+            throw new ChaincodeException("no deallocate request exists for order " + req.getOrderId());
         }
 
-        // remove licenses from allocated
-        Set<String> licenses = allocatedLicenses.getLicenses();
-        licenses.removeAll(req.getLicenses());
-        allocatedLicenses.setLicenses(licenses);
-
-        // save allocated to ledger
-        ctx.getStub().putPrivateData(collection, allocatedKey, allocatedLicenses.toByteArray());
+        return LicensesRequest.fromByteArray(bytes);
     }
 
     @Transaction
-    public void DeallocateLicenses(Context ctx) throws Exception {
-        ReturnLicensesRequest req = new ReturnLicensesRequest(ctx);
+    public void DeallocateLicensesFromAccount(Context ctx) throws Exception {
+        LicensesRequest req = new LicensesRequest(ctx);
+
+        PDP.canAllocateLicense(ctx);
+
+        // check deallocate request exists and equals the one provided
+        String key = allocateRequestKey(LicensesRequest.ACTION.DEALLOCATE, req.getOrderId());
+        byte[] requestHash = ctx.getStub().getPrivateDataHash(ADMINMSP_IPDC, key);
+        byte[] paramsHash = SHA256.hashBytesToBytes(req.toByteArray());
+        if (!Arrays.equals(requestHash, paramsHash)) {
+            throw new ChaincodeException("provided deallocation request does not match the one initiated");
+        }
+
+        // delete licenses from ORG
+        String collection = accountIPDC(req.getAccount());
+        for (String license : req.getLicenses()) {
+            LicenseKey lk = new LicenseKey(req.getOrderId(), license, "");
+
+            // delete license from ORG
+            ctx.getStub().delPrivateData(collection, lk.toKey());
+        }
+    }
+
+    @Transaction
+    public void DeallocateLicensesFromSP(Context ctx) {
+        OrderIdAndAccountRequest req = new OrderIdAndAccountRequest(ctx);
+
+        PDP.canAllocateLicense(ctx);
 
         Order order = getOrder(ctx, req.getOrderId(), req.getAccount());
-        String key = allocatedKey(order.getAssetId(), order.getId());
 
-        // get the hash of the AllocatedLicenses on the account's IPDC and compare with what is about to be applied
-        // to the ADMINMSP, if they don't match then return an exception
-        byte[] accountHash = ctx.getStub().getPrivateDataHash(accountIPDC(req.getAccount()), key);
-
-        // get allocated from ADMINMSP and remove the licenses that are being returned
-        // what's left should be the same as the AllocatedLicenses on the account IPDC
+        // check request exists
+        String key = allocateRequestKey(LicensesRequest.ACTION.DEALLOCATE, req.getOrderId());
         byte[] bytes = ctx.getStub().getPrivateData(ADMINMSP_IPDC, key);
-        AllocatedLicenses adminmspAllocatedLicenses = AllocatedLicenses.fromByteArray(bytes);
-        adminmspAllocatedLicenses.getLicenses().removeAll(req.getLicenses());
-
-        byte[] adminmspHash = SHA256.hashBytesToBytes(adminmspAllocatedLicenses.toByteArray());
-        if (Arrays.equals(accountHash, adminmspHash)) {
-            throw new ChaincodeException("provided licenses to deallocate do not match the licenses returned from account");
+        if (bytes.length == 0) {
+            throw new ChaincodeException("a deallocation request does not exist for order " + req.getOrderId());
         }
 
-        // update the allocated licenses in the adminmsp
-        ctx.getStub().putPrivateData(ADMINMSP_IPDC, key, adminmspAllocatedLicenses.toByteArray());
-
-        // update the order by decreasing the amount by the number of licenses returned
-        order.setAmount(order.getAmount() - req.getLicenses().size());
-        ctx.getStub().putPrivateData(
-                ADMINMSP_IPDC,
-                orderKey(order.getAccount(), order.getId()),
-                order.toByteArray()
-        );
+        LicensesRequest licensesRequest = LicensesRequest.fromByteArray(bytes);
 
         // update each license to remove allocated and track on ledger
-        for (String licenseId : req.getLicenses()) {
+        for (String licenseId : licensesRequest.getLicenses()) {
             LicenseKey lk = new LicenseKey(order.getAssetId(), licenseId, "");
             bytes = ctx.getStub().getPrivateData(ADMINMSP_IPDC, lk.toKey());
             if (bytes.length == 0) {
-                throw new Exception("license " + lk.getLicenseId() + " does not exist");
+                throw new ChaincodeException("license " + lk.getLicenseId() + " does not exist");
             }
 
             License license = License.fromByteArray(bytes);
@@ -344,34 +399,37 @@ public class OrderContract implements ContractInterface {
             // write to ADMINMSP
             ctx.getStub().putPrivateData(ADMINMSP_IPDC, lk.toKey(), license.toByteArray());
 
-            // write to ledger
+            // write to ledger to track tx
             ctx.getStub().putState(lk.toKey(), new byte[]{0});
         }
+
+        // update the order
+        order.getLicenses().removeAll(licensesRequest.getLicenses());
+        order.setAmount(order.getAmount() - licensesRequest.getLicenses().size());
+        ctx.getStub().putPrivateData(
+                ADMINMSP_IPDC,
+                orderKey(order.getAccount(), order.getId()),
+                order.toByteArray()
+        );
+
+        // delete request
+        ctx.getStub().delPrivateData(ADMINMSP_IPDC, key);
     }
 
     @Transaction
-    public OrderResponse GetOrder(Context ctx) {
+    public Order GetOrder(Context ctx) {
         OrderIdAndAccountRequest req = new OrderIdAndAccountRequest(ctx);
 
-        Order order = getOrder(ctx, req.getOrderId(), req.getAccount());
+        PDP.canReadOrder(ctx, req.getAccount());
 
-        // get licenses from allocated order
-        byte[] bytes = ctx.getStub().getPrivateData(
-                ADMINMSP_IPDC,
-                allocatedKey(order.getAssetId(), order.getId())
-        );
-
-        AllocatedLicenses licenses = null;
-        if (bytes.length != 0) {
-            licenses = SerializationUtils.deserialize(bytes);
-        }
-
-        return new OrderResponse(order, licenses);
+        return getOrder(ctx, req.getOrderId(), req.getAccount());
     }
 
     @Transaction
     public Order[] GetOrdersByAccount(Context ctx) {
         AccountRequest req = new AccountRequest(ctx);
+
+        PDP.canReadOrder(ctx, req.getAccount());
 
         String key = orderKey(req.getAccount(), "");
         try(QueryResultsIterator<KeyValue> stateByRange = ctx.getStub().getPrivateDataByRange(ADMINMSP_IPDC, key, key + "~")) {
@@ -393,6 +451,8 @@ public class OrderContract implements ContractInterface {
     @Transaction
     public Order[] GetOrdersByAccountAndAsset(Context ctx) {
         AssetIdAndAccountRequest req = new AssetIdAndAccountRequest(ctx);
+
+        PDP.canReadOrder(ctx, req.getAccount());
 
         String key = orderKey(req.getAccount(), "");
         try(QueryResultsIterator<KeyValue> stateByRange = ctx.getStub().getPrivateDataByRange(ADMINMSP_IPDC, key, key + "~")) {
@@ -431,6 +491,14 @@ public class OrderContract implements ContractInterface {
                     continue;
                 }
 
+                // ngac check on order account
+                try {
+                    PDP.canReadOrder(ctx, order.getAccount());
+                } catch (UnauthorizedException e) {
+                    // if unauthorized do not add to the return set
+                    continue;
+                }
+
                 orders.add(order);
             }
 
@@ -441,35 +509,38 @@ public class OrderContract implements ContractInterface {
     }
 
     @Transaction
-    public AllocatedLicenses[] GetAssetLicenses(Context ctx) {
+    public Allocated[] GetAllocatedLicenses(Context ctx) {
         AssetIdAndAccountRequest req = new AssetIdAndAccountRequest(ctx);
 
-        // TODO NGAC
+        PDP.canReadLicense(ctx, req.getAccount());
 
-        return getAllocatedLicensesWithAsset(ctx, req.getAccount(), req.getAssetId());
+        return getAllocatedLicenses(ctx, req.getAccount(), req.getAssetId());
     }
 
     @Transaction
-    public Order[] GetOrdersWithExpiredLicenses(Context ctx) {
-        AccountRequest req = new AccountRequest(ctx);
-
-        // TODO NGAC
-
+    public Order[] GetExpiredOrders(Context ctx) {
         Instant txTs = ctx.getStub().getTxTimestamp();
 
-        String key = ALLOCATED_PREFIX;
+        String key = ORDER_PREFIX;
         try(QueryResultsIterator<KeyValue> stateByRange = ctx.getStub().getPrivateDataByRange(ADMINMSP_IPDC, key, key + "~")) {
             List<Order> orders = new ArrayList<>();
 
             for (KeyValue next : stateByRange) {
                 byte[] value = next.getValue();
 
-                AllocatedLicenses allocatedLicenses = AllocatedLicenses.fromByteArray(value);
-                if (!isExpired(txTs, allocatedLicenses.getExpiration())) {
+                Order order = Order.fromByteArray(value);
+
+                // skip orders that are not expired or that the cid does not have access to
+                if (!isExpired(txTs, order.getExpiration())) {
                     continue;
                 }
 
-                Order order = getOrder(ctx, allocatedLicenses.getOrderId(), allocatedLicenses.getAccount());
+                try {
+                    PDP.canReadOrder(ctx, order.getAccount());
+                } catch (UnauthorizedException e) {
+                    continue;
+                }
+
                 orders.add(order);
             }
 
@@ -479,19 +550,19 @@ public class OrderContract implements ContractInterface {
         }
     }
 
-    protected AllocatedLicenses[] getAllocatedLicensesWithAsset(Context ctx, String account, String assetId){
-        String key = allocatedKey(assetId, "");
-        try(QueryResultsIterator<KeyValue> stateByRange = ctx.getStub().getPrivateDataByRange(accountIPDC(account), key, key + "~")) {
-            List<AllocatedLicenses> licenses = new ArrayList<>();
+    Allocated[] getAllocatedLicenses(Context ctx, String account, String assetId){
+        String collection = accountIPDC(account);
+        String key = new LicenseKey(assetId, "", "").toKey();
+        try(QueryResultsIterator<KeyValue> stateByRange = ctx.getStub().getPrivateDataByRange(collection, key, key + "~")) {
+            List<Allocated> licenses = new ArrayList<>();
 
             for (KeyValue next : stateByRange) {
                 byte[] value = next.getValue();
 
-                AllocatedLicenses allocatedLicenses = AllocatedLicenses.fromByteArray(value);
-                licenses.add(allocatedLicenses);
+                licenses.add(Allocated.fromByteArray(value));
             }
 
-            return licenses.toArray(AllocatedLicenses[]::new);
+            return licenses.toArray(Allocated[]::new);
         } catch (Exception e) {
             throw new ChaincodeException(e);
         }
@@ -507,105 +578,35 @@ public class OrderContract implements ContractInterface {
         return Order.fromByteArray(bytes);
     }
 
-    private Order renewOrder(Context ctx, String account, InitiateOrderRequest request) {
-        // get order, checking that it exists
-        Order order = getOrder(ctx, request.getOrderId(), account);
-
-        // order must have a status of ALLOCATED, RENEWAL_QUOTE_RECEIVED, or RENEWAL_QUOTE_REQUESTED
-        if (!order.getStatus().equals(Order.Status.ALLOCATED) || !order.getStatus().equals(RENEWAL_QUOTE_RECEIVED) || !order.getStatus().equals(RENEWAL_QUOTE_REQUESTED)) {
-            throw new ChaincodeException("cannot renew an order that has not been allocated yet");
-        }
-
-        order.setStatus(Order.Status.RENEWAL_INITIATED);
-        order.setDuration(request.getDuration());
-
-        return order;
-    }
-
-    private Order initiateOrder(Context ctx, InitiateOrderRequest request) {
-        String account = ctx.getClientIdentity().getMSPID();
-        String orderId = ctx.getStub().getTxId();
-        String initiationDate = DateFormatter.getFormattedTimestamp(ctx);
-
-        return new Order(
-                orderId,
-                account,
-                Order.Status.INITIATED,
-                initiationDate,
-                null,
-                null,
-                null,
-                request.getAssetId(),
-                request.getAmount(),
-                request.getDuration(),
-                0
-        );
-    }
-
-    private boolean isExpired(Instant txTs, String expiration) {
-        Instant exp = Instant.from(DATE_TIME_FORMATTER.parse(expiration));
-        return txTs.isAfter(exp);
-    }
-
-    private AllocatedLicenses allocateRenewalLicenses(Context ctx, Order order) {
-        int duration = order.getDuration();
-        String expiration = DATE_TIME_FORMATTER.format(
-                ctx.getStub()
-                   .getTxTimestamp()
-                   .atZone(ZoneId.from(UTC))
-                   .plusYears(duration)
-                   .toInstant()
-        );
-
-        // get licenses from allocation entry
-        String key = allocatedKey(order.getId(), order.getAssetId());
-        byte[] bytes = ctx.getStub().getPrivateData(ADMINMSP_IPDC, key);
-        AllocatedLicenses allocatedLicenses = SerializationUtils.deserialize(bytes);
-        allocatedLicenses.setExpiration(expiration);
-
-        ctx.getStub().putPrivateData(
-                ADMINMSP_IPDC,
-                allocatedKey(order.getId(), order.getAssetId()),
-                SerializationUtils.serialize(allocatedLicenses)
-        );
-
+    private void allocateRenewalLicenses(Context ctx, Order order) {
         // update each license on ADMINMSP to reflect the new expiration
-        for (String licenseId : allocatedLicenses.getLicenses()) {
+        for (String licenseId : order.getLicenses()) {
             LicenseKey lk = new LicenseKey(order.getAssetId(), licenseId, "");
-            bytes = ctx.getStub().getPrivateData(ADMINMSP_IPDC, lk.toKey());
+            byte[] bytes = ctx.getStub().getPrivateData(ADMINMSP_IPDC, lk.toKey());
             if (bytes.length == 0) {
                 throw new ChaincodeException("allocated license " + lk.getLicenseId() + " does not exist for asset " + order.getAssetId());
             }
 
             License license = License.fromByteArray(bytes);
-            license.setAllocated(new Allocated(order.getAccount(), expiration, order.getId()));
+            license.setAllocated(new Allocated(licenseId, order.getAccount(), order.getExpiration(), order.getId()));
 
             // write license update to ADMINMSP
             ctx.getStub().putPrivateData(ADMINMSP_IPDC, lk.toKey(), license.toByteArray());
 
+            // add salt to license key
+            lk.setSalt(license.getSalt());
+
             // write license update to ledger
             ctx.getStub().putState(lk.toHashKey(), new byte[]{0});
         }
-
-        return allocatedLicenses;
     }
 
-    private AllocatedLicenses allocateLicenses(Context ctx, Order order, List<String> licenses) {
+    private void allocateLicenses(Context ctx, Order order, List<String> licenses) {
         // check that there are no duplicate licenses
         HashSet<String> licensesSet = new HashSet<>(licenses);
         if (licensesSet.size() != licenses.size()) {
             throw new ChaincodeException("duplicate licenses are not allowed");
         }
-
-        // compute expiration
-        int duration = order.getDuration();
-        String expiration = DATE_TIME_FORMATTER.format(
-                ctx.getStub()
-                   .getTxTimestamp()
-                   .atZone(ZoneId.from(UTC))
-                   .plusYears(duration)
-                   .toInstant()
-        );
 
         // check that each license exists and is not allocated already
         // it's assumed to get here an ngac check was passed so detailed error messages are ok
@@ -622,7 +623,11 @@ public class OrderContract implements ContractInterface {
             }
 
             // update license allocated
-            license.setAllocated(new Allocated(order.getAccount(), expiration, order.getId()));
+            Allocated allocated = new Allocated(licenseId, order.getAccount(), order.getExpiration(), order.getId());
+            license.setAllocated(allocated);
+
+            // add salt to license key
+            licenseKey.setSalt(license.getSalt());
 
             // write license update to ADMINMSP
             ctx.getStub().putPrivateData(ADMINMSP_IPDC, licenseKey.toKey(), license.toByteArray());
@@ -630,22 +635,5 @@ public class OrderContract implements ContractInterface {
             // write license update to ledger
             ctx.getStub().putState(licenseKey.toHashKey(), new byte[]{0});
         }
-
-        // create allocation entry for this order to verify the licenses sent match the ones allocated
-        AllocatedLicenses allocatedLicenses = new AllocatedLicenses(
-                order.getId(),
-                order.getAssetId(),
-                order.getAccount(),
-                expiration,
-                new HashSet<>(licenses)
-        );
-
-        ctx.getStub().putPrivateData(
-                ADMINMSP_IPDC,
-                allocatedKey(order.getId(), order.getAssetId()),
-                SerializationUtils.serialize(allocatedLicenses)
-        );
-
-        return allocatedLicenses;
     }
 }

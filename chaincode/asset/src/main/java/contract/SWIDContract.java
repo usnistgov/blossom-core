@@ -1,11 +1,12 @@
 package contract;
 
-import contract.request.asset.AssetIdRequest;
-import contract.request.swid.SWIDRequest;
-import contract.request.swid.ReportSWIDRequest;
-import model.AllocatedLicenses;
+import contract.request.AssetIdAndAccountRequest;
+import contract.request.AssetIdRequest;
+import contract.request.SWIDRequest;
+import contract.request.ReportSWIDRequest;
+import model.Allocated;
 import model.SWID;
-import ngac.SWIDPDP;
+import ngac.PDP;
 import org.hyperledger.fabric.contract.Context;
 import org.hyperledger.fabric.contract.ContractInterface;
 import org.hyperledger.fabric.contract.annotation.Contract;
@@ -35,17 +36,14 @@ public class SWIDContract implements ContractInterface {
         return SWID_PREFIX + licenseId;
     }
 
-    private SWIDPDP pdp = new SWIDPDP();
-
     @Transaction
     public void ReportSWID(Context ctx) {
         ReportSWIDRequest req = new ReportSWIDRequest(ctx);
 
-        // check user can report swid
-        // TODO NGAC
+        PDP.canWriteSWID(ctx, req.getAccount());
 
-        AllocatedLicenses[] allocatedLicensesWithAsset = new OrderContract()
-                .getAllocatedLicensesWithAsset(
+        Allocated[] licensesForAccount = new OrderContract()
+                .getAllocatedLicenses(
                         ctx,
                         req.getAccount(),
                         req.getAssetId()
@@ -53,8 +51,8 @@ public class SWIDContract implements ContractInterface {
 
         // check the license has been checked out by the account
         boolean found = false;
-        for (AllocatedLicenses allocatedLicenses : allocatedLicensesWithAsset) {
-            if (allocatedLicenses.getLicenses().contains(req.getLicenseId())) {
+        for (Allocated allocated : licensesForAccount) {
+            if (allocated.getLicenseId().equals(req.getLicenseId())) {
                 found = true;
                 break;
             }
@@ -97,8 +95,7 @@ public class SWIDContract implements ContractInterface {
     public SWID GetSWID(Context ctx) {
         SWIDRequest req = new SWIDRequest(ctx);
 
-        // check can read swid for this account
-        // TODO NGAC pdp.canReadSwID(ctx);
+        PDP.canReadSWID(ctx, req.getAccount());
 
         SWID swid = getSWIDWithId(ctx, req.getAccount(), req.getLicenseId());
         if (swid == null) {
@@ -106,13 +103,6 @@ public class SWIDContract implements ContractInterface {
         }
 
         return swid;
-    }
-
-    @Transaction
-    public String[] GetSWIDsAssociatedWithAsset(Context ctx) {
-        AssetIdRequest req = new AssetIdRequest(ctx);
-
-        return getSWIDsAssociatedWithAsset(ctx, req.getAssetId());
     }
 
     SWID getSWIDWithId(Context ctx, String account, String licenseId) {
@@ -128,11 +118,7 @@ public class SWIDContract implements ContractInterface {
         return SWID.fromByteArray(bytes);
     }
 
-    String[] getSWIDsAssociatedWithAsset(Context ctx, String assetId) {
-        String account = ctx.getClientIdentity().getMSPID();
-        // check can read swid for this account
-        // TODO NGAC pdp.canReadSwID(ctx);
-
+    String[] getSWIDsAssociatedWithAsset(Context ctx, String assetId, String account) {
         String collection = accountIPDC(account);
 
         // iterate over all swids since they are stored by txid

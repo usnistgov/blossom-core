@@ -6,12 +6,17 @@ import org.hyperledger.fabric.contract.annotation.DataType;
 import org.hyperledger.fabric.contract.annotation.Property;
 
 import java.io.Serializable;
+import java.util.List;
 import java.util.Objects;
 
 import static contract.OrderContract.ORDER_PREFIX;
 
 @DataType
 public class Order implements Serializable {
+
+    public static Order fromByteArray(byte[] bytes) {
+        return SerializationUtils.deserialize(bytes);
+    }
 
     @Property
     private String id;
@@ -35,6 +40,10 @@ public class Order implements Serializable {
     private int duration;
     @Property
     private double price;
+    @Property
+    private String expiration;
+    @Property
+    private List<String> licenses;
 
     public Order(@JsonProperty String id,
                  @JsonProperty String account,
@@ -46,7 +55,9 @@ public class Order implements Serializable {
                  @JsonProperty String assetId,
                  @JsonProperty int amount,
                  @JsonProperty int duration,
-                 @JsonProperty double price) {
+                 @JsonProperty double price,
+                 @JsonProperty String expiration,
+                 @JsonProperty List<String> licenses) {
         this.id = id;
         this.account = account;
         this.status = status;
@@ -58,6 +69,8 @@ public class Order implements Serializable {
         this.amount = amount;
         this.duration = duration;
         this.price = price;
+        this.expiration = expiration;
+        this.licenses = licenses;
     }
 
     public String getId() {
@@ -148,6 +161,22 @@ public class Order implements Serializable {
         this.price = price;
     }
 
+    public String getExpiration() {
+        return expiration;
+    }
+
+    public void setExpiration(String expiration) {
+        this.expiration = expiration;
+    }
+
+    public List<String> getLicenses() {
+        return licenses;
+    }
+
+    public void setLicenses(List<String> licenses) {
+        this.licenses = licenses;
+    }
+
     public byte[] toByteArray() {
         return SerializationUtils.serialize(this);
     }
@@ -161,7 +190,10 @@ public class Order implements Serializable {
             return false;
         }
         Order order = (Order) o;
-        return amount == order.amount && duration == order.duration && Objects.equals(
+        return amount == order.amount && duration == order.duration && Double.compare(
+                price,
+                order.price
+        ) == 0 && Objects.equals(
                 id,
                 order.id
         ) && Objects.equals(account, order.account) && status == order.status && Objects.equals(
@@ -173,7 +205,7 @@ public class Order implements Serializable {
         ) && Objects.equals(latestRenewalDate, order.latestRenewalDate) && Objects.equals(
                 assetId,
                 order.assetId
-        );
+        ) && Objects.equals(expiration, order.expiration) && Objects.equals(licenses, order.licenses);
     }
 
     @Override
@@ -188,7 +220,10 @@ public class Order implements Serializable {
                 latestRenewalDate,
                 assetId,
                 amount,
-                duration
+                duration,
+                price,
+                expiration,
+                licenses
         );
     }
 
@@ -200,20 +235,15 @@ public class Order implements Serializable {
                 ", status=" + status +
                 ", initiationDate='" + initiationDate + '\'' +
                 ", approvalDate='" + approvalDate + '\'' +
-                ", completedDate='" + allocatedDate + '\'' +
+                ", allocatedDate='" + allocatedDate + '\'' +
                 ", latestRenewalDate='" + latestRenewalDate + '\'' +
                 ", assetId='" + assetId + '\'' +
                 ", amount=" + amount +
                 ", duration=" + duration +
+                ", price=" + price +
+                ", expiration='" + expiration + '\'' +
+                ", licenses=" + licenses +
                 '}';
-    }
-
-    public static String orderKey(String orderId, String account) {
-        return ORDER_PREFIX + orderId + ":" + account;
-    }
-
-    public static Order fromByteArray(byte[] bytes) {
-        return SerializationUtils.deserialize(bytes);
     }
 
     @DataType
@@ -223,7 +253,7 @@ public class Order implements Serializable {
         INITIATED,
         APPROVED,
         DENIED,
-        ALLOCATED,// -> final stage for new and renewal
+        ALLOCATED,
         RENEWAL_QUOTE_REQUESTED,
         RENEWAL_QUOTE_RECEIVED,
         RENEWAL_INITIATED,

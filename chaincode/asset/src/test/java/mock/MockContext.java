@@ -1,11 +1,9 @@
 package mock;
 
-import contract.request.asset.AddAssetRequest;
-import contract.request.asset.AssetIdRequest;
-import contract.request.asset.LicensesRequest;
-import contract.request.asset.UpdateEndDateRequest;
-import contract.request.order.InitiateOrderRequest;
-import contract.request.order.OrderIdAndAccountRequest;
+import contract.request.AddAssetRequest;
+import contract.request.AssetIdRequest;
+import contract.request.UpdateEndDateRequest;
+import contract.request.OrderIdAndAccountRequest;
 import org.apache.commons.lang3.SerializationUtils;
 import org.hyperledger.fabric.contract.ClientIdentity;
 import org.hyperledger.fabric.contract.Context;
@@ -55,26 +53,10 @@ public class MockContext extends Context {
         ((MockChaincodeStub) stub).setTransientData(map);
     }
 
-    public void setTransientData(LicensesRequest request) {
-        HashMap<String, byte[]> map = new HashMap<>();
-        map.put("assetId", request.getAssetId() == null ? null : SerializationUtils.serialize(request.getAssetId()));
-        map.put("licenses", request.getLicenses() == null ? null : SerializationUtils.serialize(request.getLicenses().toArray(new String[]{})));
-        ((MockChaincodeStub) stub).setTransientData(map);
-    }
-
     public void setTransientData(UpdateEndDateRequest request) {
         HashMap<String, byte[]> map = new HashMap<>();
         map.put("assetId", request.getAssetId() == null ? null : SerializationUtils.serialize(request.getAssetId()));
         map.put("newEndDate", request.getNewEndDate() == null ? null : SerializationUtils.serialize(request.getNewEndDate()));
-        ((MockChaincodeStub) stub).setTransientData(map);
-    }
-
-    public void setTransientData(InitiateOrderRequest request) {
-        HashMap<String, byte[]> map = new HashMap<>();
-        map.put("assetId", request.getAssetId() == null ? null : SerializationUtils.serialize(request.getAssetId()));
-        map.put("orderId", request.getOrderId() == null ? null : SerializationUtils.serialize(request.getOrderId()));
-        map.put("amount", SerializationUtils.serialize(request.getAmount()));
-        map.put("duration", SerializationUtils.serialize(request.getDuration()));
         ((MockChaincodeStub) stub).setTransientData(map);
     }
 

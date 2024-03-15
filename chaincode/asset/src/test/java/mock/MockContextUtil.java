@@ -1,11 +1,8 @@
 package mock;
 
 import contract.AssetContract;
-import contract.request.asset.AddAssetRequest;
 
 import java.time.Instant;
-import java.util.List;
-import java.util.Set;
 
 import static mock.MockOrgs.*;
 
@@ -31,7 +28,7 @@ public class MockContextUtil {
         mockContext.setClientIdentity(MockIdentity.ORG1_SO);
         mockContext.setTxId("123");
         mockContext.setTimestamp(Instant.now());
-        mockContext.setTransientData(new AddAssetRequest("123", "2000-01-01", Set.of("l1", "l2")));
+        //mockContext.setTransientData(new AddAssetRequest("123", "2000-01-01"));
         new AssetContract().AddAsset(mockContext);
 
         mockContext.setClientIdentity(initialIdentity);
