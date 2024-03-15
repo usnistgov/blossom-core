@@ -1,0 +1,183 @@
+[
+  {
+    "name": "TEST_AddAsset",
+    "user": "org1_SO",
+    "ts": "2024-01-01",
+    "function": "AddAsset",
+    "transientData": {
+      "name": "asset1",
+      "endDate": "2025-01-01",
+      "licenses": ["l1", "l2"]
+    },
+    "expectedOutput": "TEST_AddAsset",
+    "check": [
+      {
+        "name": "check add asset create asset",
+        "user": "org1_SO",
+        "ts": "2024-01-01",
+        "function": "GetAsset",
+        "transientData": {
+          "assetId": "TEST_AddAsset"
+        },
+        "expectedOutput": {
+          "id": "TEST_AddAsset",
+          "name": "asset1",
+          "numAvailable": 2,
+          "startDate": "2024-01-01",
+          "endDate": "2025-01-01",
+          "totalAmount": 2,
+          "availableLicenses": ["l1", "l2"],
+          "allocatedLicenses": {}
+        }
+      }
+    ]
+  },
+  {
+    "name": "TEST_AddLicenses",
+    "user": "org1_SO",
+    "ts": "2024-01-01",
+    "function": "AddLicenses",
+    "transientData": {
+      "assetId": "TEST_AddAsset",
+      "licenses": ["l3", "l4"]
+    },
+    "check": [
+      {
+        "name": "check add licenses added licenses",
+        "user": "org1_SO",
+        "ts": "2024-01-01",
+        "function": "GetAsset",
+        "transientData": {
+          "assetId": "TEST_AddAsset"
+        },
+        "expectedOutput": {
+          "id": "TEST_AddAsset",
+          "name": "asset1",
+          "numAvailable": 4,
+          "startDate": "2024-01-01",
+          "endDate": "2025-01-01",
+          "totalAmount": 4,
+          "availableLicenses": ["l1", "l2", "l3", "l4"],
+          "allocatedLicenses": {}
+        }
+      }
+    ]
+  },
+  {
+    "name": "TEST_RemoveLicenses",
+    "user": "org1_SO",
+    "ts": "2024-01-01",
+    "function": "RemoveLicenses",
+    "transientData": {
+      "assetId": "TEST_AddAsset",
+      "licenses": ["l3", "l4"]
+    },
+    "check": [
+      {
+        "name": "check licenses removed",
+        "user": "org1_SO",
+        "ts": "2024-01-01",
+        "function": "GetAsset",
+        "transientData": {
+          "assetId": "TEST_AddAsset"
+        },
+        "expectedOutput": {
+          "id": "TEST_AddAsset",
+          "name": "asset1",
+          "numAvailable": 2,
+          "startDate": "2024-01-01",
+          "endDate": "2025-01-01",
+          "totalAmount": 2,
+          "availableLicenses": ["l1", "l2"],
+          "allocatedLicenses": {}
+        }
+      }
+    ]
+  },
+  {
+    "name": "TEST_UpdateEndDate",
+    "user": "org1_SO",
+    "ts": "2024-01-01",
+    "function": "UpdateEndDate",
+    "transientData": {
+      "assetId": "TEST_AddAsset",
+      "newEndDate": "2026-01-01"
+    },
+    "check": [
+      {
+        "name": "check end date updated",
+        "user": "org1_SO",
+        "ts": "2024-01-01",
+        "function": "GetAsset",
+        "transientData": {
+          "assetId": "TEST_AddAsset"
+        },
+        "expectedOutput": {
+          "id": "TEST_AddAsset",
+          "name": "asset1",
+          "numAvailable": 2,
+          "startDate": "2024-01-01",
+          "endDate": "2026-01-01",
+          "totalAmount": 2,
+          "availableLicenses": ["l1", "l2"],
+          "allocatedLicenses": {}
+        }
+      }
+    ]
+  },
+  {
+    "name": "TEST_GetAssets",
+    "setup": [
+      {
+        "name": "SETUP_TEST_GetAssets",
+        "user": "org1_SO",
+        "ts": "2024-01-01",
+        "function": "AddAsset",
+        "transientData": {
+          "name": "asset2",
+          "endDate": "2025-01-01",
+          "licenses": ["l1", "l2"]
+        },
+        "expectedOutput": "SETUP_TEST_GetAssets"
+      }
+    ],
+    "user": "org1_SO",
+    "ts": "2024-01-01",
+    "function": "GetAssets",
+    "expectedOutput": [
+      {
+        "id": "TEST_AddAsset",
+        "name": "asset1",
+        "numAvailable": 2,
+        "startDate": "2024-01-01",
+        "endDate": "2026-01-01"
+      },
+      {
+        "id": "SETUP_TEST_GetAssets",
+        "name": "asset2",
+        "numAvailable": 2,
+        "startDate": "2024-01-01",
+        "endDate": "2025-01-01"
+      }
+    ]
+  },
+  {
+    "name": "TEST_GetAsset",
+    "user": "org1_SO",
+    "ts": "2024-01-01",
+    "function": "GetAsset",
+    "transientData": {
+      "assetId": "SETUP_TEST_GetAssets"
+    },
+    "expectedOutput": {
+      "id": "SETUP_TEST_GetAssets",
+      "name": "asset2",
+      "numAvailable": 2,
+      "startDate": "2024-01-01",
+      "endDate": "2025-01-01",
+      "totalAmount": 2,
+      "availableLicenses": ["l1", "l2"],
+      "allocatedLicenses": {}
+    }
+  }
+]

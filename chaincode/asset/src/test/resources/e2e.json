@@ -1,0 +1,67 @@
+[
+  {
+    "name": "test1",
+    "user": "org1_SO",
+    "channel": "asset",
+    "chaincode": "asset",
+    "contract": "asset",
+    "ts": "2024-01-01",
+    "function": "AddAsset",
+    "params": [],
+    "transientData": {
+      "name": "asset1",
+      "endDate": "2025-01-01",
+      "licenses": ["l1", "l2"]
+    },
+    "endorsingOrgs": [],
+    "expectedOutput": "test1",
+    "expectedErrorMessage": ""
+  },
+  {
+    "name": "test2",
+    "user": "org1_SO",
+    "channel": "asset",
+    "chaincode": "asset",
+    "contract": "asset",
+    "ts": "2024-01-01",
+    "function": "GetAssets",
+    "params": [],
+    "transientData": {},
+    "endorsingOrgs": [],
+    "expectedOutput": [
+      {
+        "id": "test1",
+        "name": "asset1",
+        "numAvailable": 2,
+        "startDate": "2024-01-01",
+        "endDate": "2025-01-01"
+      }
+    ],
+    "expectedErrorMessage": ""
+  },
+  {
+    "name": "test3",
+    "user": "org1_SO",
+    "channel": "asset",
+    "chaincode": "asset",
+    "contract": "asset",
+    "ts": "2024-01-01",
+    "function": "GetAsset",
+    "params": [],
+    "transientData": {
+      "assetId": "test1"
+    },
+    "endorsingOrgs": [],
+    "expectedOutput": {
+      "id": "test1",
+      "name": "asset1",
+      "numAvailable": 2,
+      "startDate": "2024-01-01",
+      "endDate": "2025-01-01",
+      "totalAmount": 2,
+      "availableLicenses": ["l1", "l2"],
+      "allocatedLicenses": {}
+    },
+    "expectedErrorMessage": ""
+  }
+]

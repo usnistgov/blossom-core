@@ -1,0 +1,45 @@
+buildscript {
+    dependencies {
+        classpath fileTree(dir: 'plugin', include:['*.jar'])
+    }
+}
+
+plugins {
+    id 'application'
+}
+
+group 'blossom-core.chaincode.authorization'
+version '1.0'
+
+dependencies {
+    compile fileTree(dir:'libs',includes:['*.jar'])
+
+    testImplementation 'org.hyperledger.fabric-chaincode-java:fabric-chaincode-shim:2.2.+'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.1'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.1'
+    testImplementation 'org.assertj:assertj-core:3.11.1'
+    testImplementation 'org.mockito:mockito-core:2.+'
+}
+
+repositories {
+    maven {
+        url "https://hyperledger.jfrog.io/hyperledger/fabric-maven"
+    }
+    maven {
+        url 'https://jitpack.io'
+    }
+    jcenter()
+}
+
+apply plugin: 'com.github.johnrengelman.shadow'
+
+shadowJar {
+    baseName = 'authorization'
+    version = null
+    classifier = null
+    mainClassName = 'org.hyperledger.fabric.contract.ContractRouter'
+
+    manifest {
+        attributes 'Main-Class': 'org.hyperledger.fabric.contract.ContractRouter'
+    }
+}

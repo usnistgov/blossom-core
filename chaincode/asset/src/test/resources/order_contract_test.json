@@ -1,0 +1,36 @@
+[
+  {
+    "name": "Test_InitiateOrder",
+    "user": "org1_SO",
+    "ts": "2024-01-01",
+    "function": "InitiateOrder",
+    "transientData": {
+      "orderId": "asset1",
+      "assetId": "2025-01-01",
+      "amount": ["l1", "l2"],
+      "duration": 1
+    },
+    "expectedOutput": "TEST_AddAsset",
+    "check": [
+      {
+        "name": "check add asset create asset",
+        "user": "org1_SO",
+        "ts": "2024-01-01",
+        "function": "GetAsset",
+        "transientData": {
+          "assetId": "TEST_AddAsset"
+        },
+        "expectedOutput": {
+          "id": "TEST_AddAsset",
+          "name": "asset1",
+          "numAvailable": 2,
+          "startDate": "2024-01-01",
+          "endDate": "2025-01-01",
+          "totalAmount": 2,
+          "availableLicenses": ["l1", "l2"],
+          "allocatedLicenses": {}
+        }
+      }
+    ]
+  }
+]
