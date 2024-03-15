@@ -638,15 +638,27 @@ Get all orders with a given asset. This will return only the orders the CID has 
   - Role: SO, ACQ, TPOC
   - Account: RO or SP
   - Status: Authorized
-### GetAllocatedLicenses
-Get the allocated licenses for an account with the given asset ID.
 
-- transient: [AssetIdAndAccountRequest](#AssetIdAndAccountRequest)
-- output: [Allocated](#Allocated)[]
+### GetAvailableLicenses
+Get the licenses available (not associated with a SWID) for this order ID and account.
+
+- transient: [OrderIdAndAccountRequest](#AssetIdAndAccountRequest)
+- output: String[]
 - NGAC policy requirements:
   - Role: SO, ACQ, TPOC
   - Account: RO or SP
   - Status: Authorized
+
+### GetLicensesWithSWIDs
+Get the licenses that are already associated with a SWID tag for this order ID and account.
+
+- transient: [OrderIdAndAccountRequest](#AssetIdAndAccountRequest)
+- output: String[]
+- NGAC policy requirements:
+  - Role: SO, ACQ, TPOC
+  - Account: RO or SP
+  - Status: Authorized
+
 ### GetExpiredOrders
 Get all expired orders. Only orders that the CID has access to will be returned. For ORGs this means only orders for this org. For SP, this means all orders for all ORGs.
 

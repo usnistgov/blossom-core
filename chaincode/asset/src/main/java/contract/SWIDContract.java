@@ -1,10 +1,9 @@
 package contract;
 
-import contract.request.AssetIdAndAccountRequest;
-import contract.request.AssetIdRequest;
 import contract.request.SWIDRequest;
 import contract.request.ReportSWIDRequest;
 import model.Allocated;
+import model.LicenseKey;
 import model.SWID;
 import ngac.PDP;
 import org.hyperledger.fabric.contract.Context;
@@ -42,23 +41,13 @@ public class SWIDContract implements ContractInterface {
 
         PDP.canWriteSWID(ctx, req.getAccount());
 
-        Allocated[] licensesForAccount = new OrderContract()
-                .getAllocatedLicenses(
-                        ctx,
-                        req.getAccount(),
-                        req.getAssetId()
-                );
-
         // check the license has been checked out by the account
-        boolean found = false;
-        for (Allocated allocated : licensesForAccount) {
-            if (allocated.getLicenseId().equals(req.getLicenseId())) {
-                found = true;
-                break;
-            }
-        }
-
-        if (!found) {
+        byte[] bytes = ctx.getStub()
+                          .getPrivateData(
+                                  accountIPDC(req.getAccount()),
+                                  new LicenseKey(req.getAssetId(), req.getLicenseId(), "").toKey()
+                          );
+        if (bytes.length == 0) {
             throw new ChaincodeException("cannot report SWID on license " + req.getLicenseId() + " for account " + req.getAccount());
         }
 
@@ -116,30 +105,5 @@ public class SWIDContract implements ContractInterface {
         }
 
         return SWID.fromByteArray(bytes);
-    }
-
-    String[] getSWIDsAssociatedWithAsset(Context ctx, String assetId, String account) {
-        String collection = accountIPDC(account);
-
-        // iterate over all swids since they are stored by txid
-        String key = swidKey("");
-        try(QueryResultsIterator<KeyValue> stateByRange = ctx.getStub().getPrivateDataByRange(collection, key, key + "~")) {
-            List<String> swids = new ArrayList<>();
-
-            for (KeyValue next : stateByRange) {
-                byte[] value = next.getValue();
-
-                SWID swid = SWID.fromByteArray(value);
-                if (!swid.getAssetId().equals(assetId)) {
-                    continue;
-                }
-
-                swids.add(swid.getPrimaryTag());
-            }
-
-            return swids.toArray(String[]::new);
-        } catch (Exception e) {
-            throw new ChaincodeException(e);
-        }
     }
 }

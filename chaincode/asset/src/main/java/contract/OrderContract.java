@@ -20,6 +20,7 @@ import java.time.ZoneId;
 import java.util.*;
 
 import static contract.AssetContract.*;
+import static contract.SWIDContract.swidKey;
 import static model.DateFormatter.DATE_TIME_FORMATTER;
 import static java.time.ZoneOffset.UTC;
 import static contract.request.LicensesRequest.allocateRequestKey;
@@ -509,12 +510,21 @@ public class OrderContract implements ContractInterface {
     }
 
     @Transaction
-    public Allocated[] GetAllocatedLicenses(Context ctx) {
-        AssetIdAndAccountRequest req = new AssetIdAndAccountRequest(ctx);
+    public String[] GetAvailableLicenses(Context ctx) {
+        OrderIdAndAccountRequest req = new OrderIdAndAccountRequest(ctx);
 
         PDP.canReadLicense(ctx, req.getAccount());
 
-        return getAllocatedLicenses(ctx, req.getAccount(), req.getAssetId());
+        return getAvailableLicenses(ctx, req.getAccount(), req.getOrderId());
+    }
+
+    @Transaction
+    public String[] GetLicensesWithSWIDs(Context ctx) {
+        OrderIdAndAccountRequest req = new OrderIdAndAccountRequest(ctx);
+
+        PDP.canReadLicense(ctx, req.getAccount());
+
+        return getLicensesWithSWIDs(ctx, req.getAccount(), req.getOrderId());
     }
 
     @Transaction
@@ -550,7 +560,46 @@ public class OrderContract implements ContractInterface {
         }
     }
 
-    Allocated[] getAllocatedLicenses(Context ctx, String account, String assetId){
+    String[] getAvailableLicenses(Context ctx, String account, String orderId) {
+        // get order
+        Order order = getOrder(ctx, orderId, account);
+
+        // collect only licenses in order that do not have a swid:id entry
+        List<String> availableLicenses = new ArrayList<>();
+        for (String licenseId : order.getLicenses()) {
+            String key = swidKey(licenseId);
+            byte[] bytes = ctx.getStub().getPrivateData(accountIPDC(account), key);
+            if (bytes.length > 0) {
+                continue;
+            }
+
+            availableLicenses.add(licenseId);
+        }
+
+        return availableLicenses.toArray(String[]::new);
+    }
+
+    String[] getLicensesWithSWIDs(Context ctx, String account, String orderId) {
+        // get order
+        Order order = getOrder(ctx, orderId, account);
+
+        // collect only licenses in order that do not have a swid:id entry
+        List<String> licensesWithSWIDs = new ArrayList<>();
+        for (String licenseId : order.getLicenses()) {
+            String key = swidKey(licenseId);
+            byte[] bytes = ctx.getStub().getPrivateData(accountIPDC(account), key);
+            if (bytes.length == 0) {
+                continue;
+            }
+
+            licensesWithSWIDs.add(licenseId);
+        }
+
+        return licensesWithSWIDs.toArray(String[]::new);
+    }
+
+
+    /*Allocated[] getAllocatedLicensesForAsset(Context ctx, String account, String assetId){
         String collection = accountIPDC(account);
         String key = new LicenseKey(assetId, "", "").toKey();
         try(QueryResultsIterator<KeyValue> stateByRange = ctx.getStub().getPrivateDataByRange(collection, key, key + "~")) {
@@ -566,7 +615,7 @@ public class OrderContract implements ContractInterface {
         } catch (Exception e) {
             throw new ChaincodeException(e);
         }
-    }
+    }*/
 
     private Order getOrder(Context ctx, String orderId, String account) {
         // get order from IPDC
